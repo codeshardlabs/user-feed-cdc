@@ -14,12 +14,12 @@ docker run --rm -d --name cassandra -p 9042:9042 --hostname cassandra --network 
 
 1. Create new virtual environment
 ```bash
-python -m venv venv
+python3 -m venv venv
 ```
 
 2. Activate that environment
 ```bash
-./venv/Scripts/activate
+source venv/bin/activate
 ```
 
 3. Run the development server
