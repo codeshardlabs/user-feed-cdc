@@ -9,7 +9,6 @@
 docker network create cassandra
 docker run --rm -d --name cassandra -p 9042:9042 --hostname cassandra --network cassandra cassandra
 ```
-
 #### Local server
 
 1. Create new virtual environment
