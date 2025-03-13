@@ -3,11 +3,11 @@ from typing import Union, Optional, Dict
 import os
 from confluent_kafka import Producer
 from pydantic import BaseModel
-import env
+from env import  KAFKA_TOPIC, DEBEZIUM_CONNECT_URL, FLINK_REST_API_URL, CASSANDRA_KEYSPACE, CASSANDRA_TABLE
 from enums import JobName
 import json
 import requests
-from utils import get_kafka_producer, run_flink_job, get_postgres_connection, setup_debezium_connector, get_cassandra_session
+from utils import get_kafka_producer, run_flink_job, setup_debezium_connector, get_cassandra_session
 from config import FlinkJobConfig
 import uuid
 
@@ -20,7 +20,8 @@ class DataRecord(BaseModel):
     timestamp: int
     target_id: Optional[str] = None
     target_type: Optional[str] = None
-    metadata: Dict[str, str] 
+    metadata: Dict[str, str]
+    source_table: Optional[str] = None
 
 
 
@@ -39,13 +40,17 @@ async def send_activity(data: DataRecord):
     try: 
         data_dict = data.model_dump()
         producer = get_kafka_producer()
+        
+        # Determine the topic based on source_table
+        topic = f"postgres.codeshard.{data.source_table}" if data.source_table else KAFKA_TOPIC
+        
         producer.produce(
-            env.KAFKA_TOPIC,
+            topic,
             key=data.user_id,
             value=json.dumps(data_dict)
         )
         producer.flush()
-        return {"status": "success", "message": f"Activity sent to Kafka topic {env.KAFKA_TOPIC}"}
+        return {"status": "success", "message": f"Activity sent to Kafka topic {topic}"}
     except Exception as e:
         print(f"Error sending activity to Kafka: {e}")
         raise HTTPException(status_code=500, detail=f"Failed to send activity to Kafka: {str(e)}")
@@ -77,7 +82,7 @@ def get_flink_jobs():
     It returns a list of jobs with their status, name, and other details.
     """
     try: 
-        response = requests.get(f"{env.FLINK_REST_API_URL}/jobs/overview")
+        response = requests.get(f"{FLINK_REST_API_URL}/jobs/overview")
         if response.status_code != 200:
             raise HTTPException(status_code=500, detail=f"Failed to get flink jobs: {response.text}")
         return response.json()
@@ -100,7 +105,7 @@ def get_cassandra_activities(user_id: str, limit: int = 100):
         ## query with prepared statement for security
         prepared_stmt = session.prepare(
             f"""
-                SELECT * FROM {env.CASSANDRA_KEYSPACE}.{env.CASSANDRA_TABLE}
+                SELECT * FROM {CASSANDRA_KEYSPACE}.{CASSANDRA_TABLE}
                 WHERE user_id = ?
                 LIMIT ?
             """)
@@ -148,7 +153,7 @@ async def get_connector_status():
     Returns information about the connector's configuration and tasks.
     """
     try:
-        response = requests.get(f"{env.DEBEZIUM_CONNECT_URL}/connectors/postgres-connector/status")
+        response = requests.get(f"{DEBEZIUM_CONNECT_URL}/connectors/postgres-connector/status")
         if response.status_code != 200:
             return {
                 "status": "not_found",

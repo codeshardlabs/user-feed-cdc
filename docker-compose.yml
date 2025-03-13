@@ -60,9 +60,10 @@ services:
         condition: service_healthy
     command: >
       bash -c '
-        kafka-topics --bootstrap-server kafka:29092 --create --if-not-exists --topic input-topic --partitions 3 --replication-factor 1
-        kafka-topics --bootstrap-server kafka:29092 --create --if-not-exists --topic postgres.inventory.customers --partitions 3 --replication-factor 1
-        kafka-topics --bootstrap-server kafka:29092 --create --if-not-exists --topic postgres.inventory.orders --partitions 3 --replication-factor 1
+        kafka-topics --bootstrap-server kafka:29092 --create --if-not-exists --topic postgres.codeshard.likes --partitions 3 --replication-factor 1
+        kafka-topics --bootstrap-server kafka:29092 --create --if-not-exists --topic postgres.codeshard.shards --partitions 3 --replication-factor 1
+        kafka-topics --bootstrap-server kafka:29092 --create --if-not-exists --topic postgres.codeshard.users --partitions 3 --replication-factor 1
+        kafka-topics --bootstrap-server kafka:29092 --create --if-not-exists --topic postgres.codeshard.comments --partitions 3 --replication-factor 1
         echo "Kafka topics created"
       '
 

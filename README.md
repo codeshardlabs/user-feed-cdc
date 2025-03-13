@@ -25,3 +25,7 @@ source venv/bin/activate
 ```bash
 uvicorn main:app --reload
 ```
+
+### Workflow
+
+ ![Workflow](/public/workflow.png)
