@@ -9,7 +9,7 @@ from enums import JobName
 import json
 import requests
 from utils import get_kafka_producer, run_flink_job, setup_debezium_connector, get_cassandra_session, get_postgres_connection
-from config import FlinkJobConfig
+from config import FlinkJobConfig, DataRecord, FollowUserRequestBody
 from cache import cache
 
 app = FastAPI(title="user-feed")
@@ -22,14 +22,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-class DataRecord(BaseModel):
-    user_id: str
-    activity_type: str
-    timestamp: int
-    target_id: Optional[str] = None
-    target_type: Optional[str] = None
-    metadata: Dict[str, str]
-    source_table: Optional[str] = None
+
 
 @app.get("/")
 def read_root():
@@ -108,9 +101,12 @@ def get_cassandra_activities(user_id: str, limit: int = 100, offset: int = 0):
             return {"data": cached_activities, "count": len(cached_activities)}
         
         # get user followers from postgres
-        session = get_postgres_connection()
-        followers = session.execute(f"SELECT following_id FROM followers WHERE follower_id = '{user_id}'")
-        followers = [follower.following_id for follower in followers]
+        conn = get_postgres_connection()
+        cur = conn.cursor()
+        cur.execute(f"SELECT following_id FROM followers WHERE follower_id = '{user_id}'")
+        followers = [follower.following_id for follower in cur]
+        cur.close()
+        conn.close()
 
         # get activities from cassandra
         cassandra_session = get_cassandra_session()
@@ -123,6 +119,7 @@ def get_cassandra_activities(user_id: str, limit: int = 100, offset: int = 0):
                 uuid_result = cassandra_session.execute(f"SELECT UUID('{follower_id}') AS uuid")[0]
                 follower_uuids.append(uuid_result.uuid)
         except Exception as e:
+            cassandra_session.shutdown()
             raise HTTPException(status_code=404, detail=f"Invalid UUID format in follower IDs: {str(e)}")
         
         ## query with prepared statement for security
@@ -149,15 +146,17 @@ def get_cassandra_activities(user_id: str, limit: int = 100, offset: int = 0):
             }
             results.append(temp)
         
+        cassandra_session.shutdown()
         ## cache the results
         cache.set(cache_key, results)
+        cache.shutdown()
         return {"data": results, "count": len(results)}
     except Exception as e:
         print(f"Error getting cassandra activities: {e}")
         raise HTTPException(status_code=500, detail=f"Failed to get cassandra activities: {str(e)}")
     
 #### Debezium setup
-@app.post("/debezium/setup", tags=["debezium"])
+@app.get("/debezium/setup", tags=["debezium"])
 async def setup_debezium():
     """
     Set up the Debezium connector for PostgreSQL CDC.
@@ -169,7 +168,6 @@ async def setup_debezium():
         result = await setup_debezium_connector()
         return {"data" : result, "status": "success", "message": "Debezium connector setup completed"}
     except Exception as e:
-        print(f"Error setting up debezium connector: {e}")
         raise HTTPException(status_code=500, detail=f"Failed to setup debezium connector: {str(e)}")
 
 @app.get("/debezium/status", tags=["debezium"])
@@ -195,16 +193,21 @@ async def get_connector_status():
     
 ### Follow User Activity in postgres table 
 @app.post("/follow/user", tags=["activity"])
-async def follow_user(user_id: str, other_user_id: str):
+async def follow_user(body: FollowUserRequestBody):
     """
     Follow a user.
     """
     try: 
-        session = get_postgres_connection()
-        session.execute(f"INSERT INTO followers (follower_id, following_id) VALUES ('{user_id}', '{other_user_id}')")
+        conn = get_postgres_connection()
+        cur = conn.cursor()
+        cur.execute(f"INSERT INTO followers (follower_id, following_id) VALUES ('{body.user_id}', '{body.other_user_id}')")
+        conn.commit()
         return {"status": "success", "message": "User followed successfully"}
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to follow user: {str(e)}")
+    finally:
+        cur.close()
+        conn.close()
     
 ### Create New Post Activity in postgres table 
 @app.post("/create/post", tags=["activity"])

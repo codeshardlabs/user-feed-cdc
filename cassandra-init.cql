@@ -3,7 +3,7 @@ CREATE KEYSPACE IF NOT EXISTS codeshard
 WITH replication = {'class': 'SimpleStrategy', 'replication_factor': 1};
 
 -- Create the user activity table
-CREATE TABLE IF NOT EXISTS mykeyspace.user_activity (
+CREATE TABLE IF NOT EXISTS codeshard.user_activity (
     user_id UUID,
     activity_id TIMEUUID,
     activity_type TEXT,

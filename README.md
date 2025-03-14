@@ -81,8 +81,10 @@ The architecture ensures:
 
 ```bash
 #!/bin/bash
+docker-compose down -v
 docker-compose pull
 docker-compose up -d 
+docker-compose ps 
 ```
 
 #### Local server
@@ -101,4 +103,9 @@ source venv/bin/activate
 ```bash
 uvicorn main:app --reload
 ```
-
+4. Test the setup using a shell script
+```bash
+#!/bin/bash
+chmod +x test_setup.sh
+./test-setup.sh
+```
