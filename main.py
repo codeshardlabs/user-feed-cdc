@@ -10,7 +10,7 @@ import json
 import requests
 from utils import get_kafka_producer, run_flink_job, setup_debezium_connector, get_cassandra_session, get_postgres_connection
 from config import FlinkJobConfig
-
+from cache import cache
 
 app = FastAPI(title="user-feed")
 
@@ -30,9 +30,6 @@ class DataRecord(BaseModel):
     target_type: Optional[str] = None
     metadata: Dict[str, str]
     source_table: Optional[str] = None
-
-
-
 
 @app.get("/")
 def read_root():
@@ -104,6 +101,12 @@ def get_cassandra_activities(user_id: str, limit: int = 100, offset: int = 0):
      Generate user feed for a specific user by returning activities from cassandra of the user that the user follows
     """
     try: 
+        ## Check cache first 
+        cache_key = f"user_feed:{user_id}:{limit}:{offset}"
+        cached_activities = cache.get(cache_key)
+        if cached_activities:
+            return {"data": cached_activities, "count": len(cached_activities)}
+        
         # get user followers from postgres
         session = get_postgres_connection()
         followers = session.execute(f"SELECT following_id FROM followers WHERE follower_id = '{user_id}'")
@@ -145,6 +148,9 @@ def get_cassandra_activities(user_id: str, limit: int = 100, offset: int = 0):
                 "metadata": dict(row.metadata) if row.metadata else {}
             }
             results.append(temp)
+        
+        ## cache the results
+        cache.set(cache_key, results)
         return {"data": results, "count": len(results)}
     except Exception as e:
         print(f"Error getting cassandra activities: {e}")

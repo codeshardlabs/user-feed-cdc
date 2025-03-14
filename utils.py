@@ -135,7 +135,7 @@ def run_flink_job(config: FlinkJobConfig):
                 target_type,
                 metadata
             FROM kafka_source
-        """).wait()   
+        """).wait()
     else:
         raise ValueError(f"Invalid job name: {job_name}")
 
