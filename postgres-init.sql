@@ -99,3 +99,12 @@ INSERT INTO "shards" ("id", "user_id", "title", "mode", "type") VALUES
 (3, '3', 'My Third Shard', 'normal', 'public'),
 (4, '4', 'My Fourth Shard', 'collaboration', 'public'),
 (5, '5', 'My Fifth Shard', 'normal', 'public');
+
+-- follow users
+INSERT INTO "followers" ("follower_id", "following_id") VALUES 
+('1', '2'),
+('1', '3'),
+('2', '1'),
+('2', '3'),
+('3', '1'),
+('3', '2');
