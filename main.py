@@ -8,9 +8,8 @@ from env import  KAFKA_TOPIC, DEBEZIUM_CONNECT_URL, FLINK_REST_API_URL, CASSANDR
 from enums import JobName
 import json
 import requests
-from utils import get_kafka_producer, run_flink_job, setup_debezium_connector, get_cassandra_session
+from utils import get_kafka_producer, run_flink_job, setup_debezium_connector, get_cassandra_session, get_postgres_connection
 from config import FlinkJobConfig
-import uuid
 
 
 app = FastAPI(title="user-feed")
@@ -100,26 +99,39 @@ def get_flink_jobs():
         raise HTTPException(status_code=500, detail=f"Failed to get flink jobs: {str(e)}")
 
 @app.get("/cassandra/activities", tags=["cassandra"])
-def get_cassandra_activities(user_id: str, limit: int = 100):
+def get_cassandra_activities(user_id: str, limit: int = 100, offset: int = 0):
     """
-     Retrieve user activities from Cassandra for a specific user.
+     Generate user feed for a specific user by returning activities from cassandra of the user that the user follows
     """
     try: 
-        session = get_cassandra_session()
-        try: 
-            user_uuid = session.execute(f"SELECT UUID('{user_id}') AS uuid")[0].uuid
+        # get user followers from postgres
+        session = get_postgres_connection()
+        followers = session.execute(f"SELECT following_id FROM followers WHERE follower_id = '{user_id}'")
+        followers = [follower.following_id for follower in followers]
+
+        # get activities from cassandra
+        cassandra_session = get_cassandra_session()
+        
+        # Convert all follower IDs to UUIDs
+        try:
+            # Convert list of follower IDs to list of UUIDs
+            follower_uuids = []
+            for follower_id in followers:
+                uuid_result = cassandra_session.execute(f"SELECT UUID('{follower_id}') AS uuid")[0]
+                follower_uuids.append(uuid_result.uuid)
         except Exception as e:
-            raise HTTPException(status_code=404, detail=f"Invalid UUID format: {str(e)}")
+            raise HTTPException(status_code=404, detail=f"Invalid UUID format in follower IDs: {str(e)}")
         
         ## query with prepared statement for security
-        prepared_stmt = session.prepare(
+        prepared_stmt = cassandra_session.prepare(
             f"""
                 SELECT * FROM {CASSANDRA_KEYSPACE}.{CASSANDRA_TABLE}
-                WHERE user_id = ?
+                WHERE user_id in ?
                 LIMIT ?
+                OFFSET ?
             """)
         
-        result = session.execute(prepared_stmt, (user_uuid, limit))
+        result = cassandra_session.execute(prepared_stmt, (follower_uuids, limit, offset))
         results = []
         for row in result:
                 # Handle potential None values and proper UUID conversion
@@ -154,7 +166,7 @@ async def setup_debezium():
         print(f"Error setting up debezium connector: {e}")
         raise HTTPException(status_code=500, detail=f"Failed to setup debezium connector: {str(e)}")
 
-@app.get("/debezium/status", tags=["Debezium"])
+@app.get("/debezium/status", tags=["debezium"])
 async def get_connector_status():
     """
     Get the status of the Debezium connector.
@@ -175,6 +187,59 @@ async def get_connector_status():
             detail=f"Failed to get connector status: {str(e)}"
         )
     
+### Follow User Activity in postgres table 
+@app.post("/follow/user", tags=["activity"])
+async def follow_user(user_id: str, other_user_id: str):
+    """
+    Follow a user.
+    """
+    try: 
+        session = get_postgres_connection()
+        session.execute(f"INSERT INTO followers (follower_id, following_id) VALUES ('{user_id}', '{other_user_id}')")
+        return {"status": "success", "message": "User followed successfully"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to follow user: {str(e)}")
+    
+### Create New Post Activity in postgres table 
+@app.post("/create/post", tags=["activity"])
+async def create_post(user_id: str, title: str):
+    """
+    Create a new post.
+    """
+    try: 
+        session = get_postgres_connection()
+        title = title if title else "Untitled"
+        session.execute(f"INSERT INTO shards (user_id, title, mode, type) VALUES ('{user_id}', '{title}', 'normal', 'public')")
+        return {"status": "success", "message": "Post created successfully"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to create post: {str(e)}")
+
+### Comment on Post Activity in postgres table 
+@app.post("/comment/post", tags=["activity"])
+async def comment_on_post(user_id: str, shard_id: str, message: str):
+    """
+    Comment on a post.
+    """
+    try: 
+        session = get_postgres_connection()
+        session.execute(f"INSERT INTO comments (user_id, shard_id, comment) VALUES ('{user_id}', '{shard_id}', '{message}')")
+        return {"status": "success", "message": "Comment created successfully"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to comment on post: {str(e)}")
+    
+### Like Post Activity in postgres table 
+@app.post("/like/post", tags=["activity"])
+async def like_post(user_id: str, shard_id: str):
+    """
+    Like a post.
+    """
+    try: 
+        session = get_postgres_connection()
+        session.execute(f"INSERT INTO likes (user_id, shard_id) VALUES ('{user_id}', '{shard_id}')")
+        return {"status": "success", "message": "Post liked successfully"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to like post: {str(e)}")
+
 # Health check endpoint
 @app.get("/health", tags=["Health"])
 async def health_check():

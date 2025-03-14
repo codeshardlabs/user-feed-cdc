@@ -30,8 +30,8 @@ uvicorn main:app --reload
 
  ![Workflow](/public/workflow.png)
 
- ### Activity to be listed on feed
- - Follow User
- - User Create New Post
- - User Comment on Post
- - User Likes a post
+ ### Possible Activity types to be listed on user feed
+ - Follow User ("FOLLOW")
+ - User Create New Post ("SHARD")
+ - User Comment on Post ("COMMENT")
+ - User Likes a post ("LIKE")
