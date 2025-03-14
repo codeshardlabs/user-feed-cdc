@@ -10,7 +10,6 @@ CASSANDRA_PASSWORD = os.environ.get("CASSANDRA_PASSWORD", "")
 
 ### Kafka
 KAFKA_BOOTSTRAP_SERVERS = os.environ.get("KAFKA_BOOTSTRAP_SERVERS", "localhost:9092")
-KAFKA_TOPIC = os.environ.get("KAFKA_TOPIC")
 
 ### Postgres
 POSTGRES_HOST = os.environ.get("POSTGRES_HOST", "localhost")

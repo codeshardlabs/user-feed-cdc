@@ -2,13 +2,14 @@
 ### User feed using Change Data Capture and  KFC(Kafka, Flink, Cassandra) Stack
 
 ### Local Development
-#### Cassandra DB
+#### Start all the services
 
 ```bash
 #!/bin/bash
-docker network create cassandra
-docker run --rm -d --name cassandra -p 9042:9042 --hostname cassandra --network cassandra cassandra
+docker-compose pull
+docker-compose up -d 
 ```
+
 #### Local server
 
 1. Create new virtual environment

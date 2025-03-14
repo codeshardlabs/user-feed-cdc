@@ -4,7 +4,7 @@ from typing import Union, Optional, Dict
 import os
 from confluent_kafka import Producer
 from pydantic import BaseModel
-from env import  KAFKA_TOPIC, DEBEZIUM_CONNECT_URL, FLINK_REST_API_URL, CASSANDRA_KEYSPACE, CASSANDRA_TABLE
+from env import  DEBEZIUM_CONNECT_URL, FLINK_REST_API_URL, CASSANDRA_KEYSPACE, CASSANDRA_TABLE
 from enums import JobName
 import json
 import requests
@@ -47,7 +47,7 @@ async def send_activity(data: DataRecord):
         producer = get_kafka_producer()
         
         # Determine the topic based on source_table
-        topic = f"postgres.codeshard.{data.source_table}" if data.source_table else KAFKA_TOPIC
+        topic = f"postgres.codeshard.{data.source_table}" if data.source_table else "default_topic"
         
         producer.produce(
             topic,

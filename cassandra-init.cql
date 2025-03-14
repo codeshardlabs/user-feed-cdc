@@ -1,5 +1,5 @@
 -- Create the keyspace
-CREATE KEYSPACE IF NOT EXISTS mykeyspace 
+CREATE KEYSPACE IF NOT EXISTS codeshard 
 WITH replication = {'class': 'SimpleStrategy', 'replication_factor': 1};
 
 -- Create the user activity table
