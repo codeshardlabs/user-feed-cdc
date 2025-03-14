@@ -175,7 +175,6 @@ async def get_connector_status():
             detail=f"Failed to get connector status: {str(e)}"
         )
     
-
 # Health check endpoint
 @app.get("/health", tags=["Health"])
 async def health_check():

@@ -87,3 +87,15 @@ CREATE INDEX "comm_shard_id_index" ON "comments" USING btree ("shard_id");--> st
 CREATE INDEX "dep_shard_id_index" ON "dependencies" USING btree ("shard_id");--> statement-breakpoint
 CREATE INDEX "file_shard_id_index" ON "files" USING btree ("shard_id");--> statement-breakpoint
 CREATE INDEX "like_shard_id_index" ON "likes" USING btree ("shard_id");
+
+
+-- create users 
+INSERT INTO "users" ("id") VALUES ('1'), ('2'), ('3'), ('4'), ('5');
+
+-- create shards
+INSERT INTO "shards" ("id", "user_id", "title", "mode", "type") VALUES 
+(1, '1', 'My First Shard', 'normal', 'public'),
+(2, '2', 'My Second Shard', 'collaboration', 'public'),
+(3, '3', 'My Third Shard', 'normal', 'public'),
+(4, '4', 'My Fourth Shard', 'collaboration', 'public'),
+(5, '5', 'My Fifth Shard', 'normal', 'public');

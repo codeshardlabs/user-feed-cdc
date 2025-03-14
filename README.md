@@ -29,3 +29,9 @@ uvicorn main:app --reload
 ### Workflow
 
  ![Workflow](/public/workflow.png)
+
+ ### Activity to be listed on feed
+ - Follow User
+ - User Create New Post
+ - User Comment on Post
+ - User Likes a post

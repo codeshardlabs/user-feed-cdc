@@ -18,6 +18,22 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+  
+  # Initialize PostgreSQL database
+  postgres-init:
+    image: debezium/postgres:14
+    depends_on:
+      postgres:
+        condition: service_healthy
+    volumes:
+      - ./postgres-init.sql:/postgres-init.sql
+    command: >
+      bash -c '
+        echo "Initializing PostgreSQL database..."
+        PGPASSWORD=postgres psql -h postgres -U postgres -d codeshard -f /postgres-init.sql
+        echo "PostgreSQL initialization completed successfully."
+      '
+    restart: on-failure
 
   # Zookeeper for Kafka coordination
   zookeeper:
@@ -165,12 +181,12 @@ services:
       - CASSANDRA_CONTACT_POINTS=cassandra
       - CASSANDRA_PORT=9042
       - CASSANDRA_KEYSPACE=mykeyspace
-      - CASSANDRA_TABLE=mytable
+      - CASSANDRA_TABLE=user_activity
       - POSTGRES_HOST=postgres
       - POSTGRES_PORT=5432
       - POSTGRES_USER=postgres
       - POSTGRES_PASSWORD=postgres
-      - POSTGRES_DB=inventory
+      - POSTGRES_DB=codeshard
       - DEBEZIUM_CONNECT_URL=http://debezium-connect:8083
 
 volumes:
