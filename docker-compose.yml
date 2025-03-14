@@ -159,6 +159,19 @@ services:
       timeout: 5s
       retries: 5
 
+  ## Redis 
+  redis:
+    image: redis:latest
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
   # FastAPI application
   fastapi:
     build:
@@ -174,6 +187,8 @@ services:
       jobmanager:
         condition: service_healthy
       debezium-connect:
+        condition: service_healthy
+      redis:
         condition: service_healthy
     environment:
       - KAFKA_BOOTSTRAP_SERVERS=kafka:29092
@@ -192,3 +207,4 @@ services:
 volumes:
   cassandra_data:
   postgres_data:
+  redis_data:
