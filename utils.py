@@ -70,7 +70,7 @@ def run_flink_job(config: FlinkJobConfig):
 
     if config.job_name == JobName.KAFKA_TO_CASSANDRA.value:
         # Create a table for each source table
-        for table in ['likes', 'shards', 'users', 'comments']:
+        for table in ['likes', 'shards', 'followers', 'comments']:
             table_env.execute_sql(f"""
                 CREATE TABLE kafka_source_{table} (
                     user_id STRING,
