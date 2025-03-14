@@ -1,0 +1,15 @@
+-- Create the keyspace
+CREATE KEYSPACE IF NOT EXISTS mykeyspace 
+WITH replication = {'class': 'SimpleStrategy', 'replication_factor': 1};
+
+-- Create the user activity table
+CREATE TABLE IF NOT EXISTS mykeyspace.user_activity (
+    user_id UUID,
+    activity_id TIMEUUID,
+    activity_type TEXT,
+    timestamp TIMESTAMP,
+    target_id UUID,
+    target_type TEXT,
+    metadata MAP<TEXT, TEXT>,
+    PRIMARY KEY ((user_id), activity_id)
+) WITH CLUSTERING ORDER BY (activity_id DESC);

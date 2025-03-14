@@ -1,4 +1,5 @@
 from fastapi import FastAPI, HTTPException, BackgroundTasks
+from fastapi.middleware.cors import CORSMiddleware
 from typing import Union, Optional, Dict
 import os
 from confluent_kafka import Producer
@@ -13,6 +14,14 @@ import uuid
 
 
 app = FastAPI(title="user-feed")
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 class DataRecord(BaseModel):
     user_id: str
@@ -165,6 +174,25 @@ async def get_connector_status():
             status_code=500, 
             detail=f"Failed to get connector status: {str(e)}"
         )
+    
+
+# Health check endpoint
+@app.get("/health", tags=["Health"])
+async def health_check():
+    """
+    Health check endpoint.
+    Returns a simple response to indicate the API is running.
+    """
+    return {"status": "healthy", "message": "API is running"}
+
+# Documentation customization
+app.swagger_ui_parameters = {
+    "deepLinking": True,
+    "persistAuthorization": True,
+    "displayRequestDuration": True,
+    "filter": True,
+    "syntaxHighlight.theme": "monokai"
+}
     
 if __name__ == "__main__":
     import uvicorn

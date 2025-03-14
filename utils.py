@@ -23,24 +23,24 @@ def get_cassandra_session():
     )
     session = cluster.connect()
     
-    ### Create Keyspace
-    session.execute(f"""
-        CREATE KEYSPACE IF NOT EXISTS {CASSANDRA_KEYSPACE} 
-        WITH REPLICATION = { 'class' : 'SimpleStrategy', 'replication_factor' : 1 };
-    """)
-    ### create table
-    session.execute(f"""
-    CREATE TABLE IF NOT EXISTS {CASSANDRA_KEYSPACE}.{CASSANDRA_TABLE} (
-    user_id UUID,
-    activity_id TIMEUUID,
-    activity_type TEXT,
-    timestamp TIMESTAMP,
-    target_id UUID,
-    target_type TEXT,
-    metadata MAP<TEXT, TEXT>,
-    PRIMARY KEY ((user_id), activity_id))
-    WITH CLUSTERING ORDER BY (activity_id DESC);
-    """)
+    # ### Create Keyspace
+    # session.execute(f"""
+    #     CREATE KEYSPACE IF NOT EXISTS {CASSANDRA_KEYSPACE} 
+    #     WITH REPLICATION = { 'class' : 'SimpleStrategy', 'replication_factor' : 1 };
+    # """)
+    # ### create table
+    # session.execute(f"""
+    # CREATE TABLE IF NOT EXISTS {CASSANDRA_KEYSPACE}.{CASSANDRA_TABLE} (
+    # user_id UUID,
+    # activity_id TIMEUUID,
+    # activity_type TEXT,
+    # timestamp TIMESTAMP,
+    # target_id UUID,
+    # target_type TEXT,
+    # metadata MAP<TEXT, TEXT>,
+    # PRIMARY KEY ((user_id), activity_id))
+    # WITH CLUSTERING ORDER BY (activity_id DESC);
+    # """)
     return session
 
 
