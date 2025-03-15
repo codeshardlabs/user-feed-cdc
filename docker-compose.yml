@@ -63,7 +63,7 @@ services:
     environment:
       KAFKA_BROKER_ID: 1
       KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
-      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:29092,PLAINTEXT_HOST://localhost:9092
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:29092,PLAINTEXT_HOST://kafka:9092
       KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
       KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
       KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
@@ -180,6 +180,34 @@ services:
       timeout: 5s
       retries: 5
     restart: unless-stopped
+
+  debezium-config:
+    image: curlimages/curl:7.83.1
+    platform: linux/amd64
+    depends_on:
+      debezium-connect:
+        condition: service_healthy
+    volumes:
+      - ./debezium-connectors:/connectors
+    command: >
+      sh -c '
+        echo "Waiting for Debezium Connect to be ready..."
+        until curl -s debezium-connect:8083/connectors >/dev/null; do
+          echo "Debezium Connect not ready yet, waiting..."
+          sleep 5
+        done
+        echo "Creating Debezium connectors..."
+        for connector in /connectors/*.json; do
+          if [ -f "$connector" ]; then
+            connector_name=$(basename "$connector" .json)
+            echo "Creating connector: $connector_name"
+            curl -X POST -H "Content-Type: application/json" --data @"$connector" http://debezium-connect:8083/connectors
+          fi
+        done
+        echo "Connectors created successfully."
+      '
+    restart: on-failure
+  
 
   ## Redis 
   redis:

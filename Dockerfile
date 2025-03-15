@@ -17,17 +17,20 @@ ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
     JAVA_HOME=/usr/lib/jvm/temurin-11-jre-amd64
 
+# Create and activate virtual environment
+RUN python -m venv /opt/venv
+ENV PATH="/opt/venv/bin:$PATH"
+
 # Create directory for Flink connector JARs
 RUN mkdir -p /flink-connectors
 
-# Copy requirements file
+# Copy requirements file and install dependencies
 COPY requirements.txt .
-COPY flink-connectors/ /flink-connectors/
-
-# Install requirements
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy the application code
+# Copy Flink connectors and application code
+COPY flink-connectors/ /flink-connectors/
+COPY debezium-connectors/ /debezium-connectors/
 COPY . .
 
 # Command to run

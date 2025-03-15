@@ -42,11 +42,12 @@ def run_flink_job(config: FlinkJobConfig):
     table_env = StreamTableEnvironment.create(env, environment_settings=settings)
 
     ### add reqd. jar files
+    JAR_FILE_PREFIX = "file://flink-connectors"
     table_env.get_config().get_configuration().set_string(
         "pipeline.jars", 
-        f"{FLINK_CONNECTOR_KAFKA_JAR};"
-        f"{FLINK_CONNECTOR_CASSANDRA_JAR};"
-        f"{FLINK_JSON_JAR}"
+        f"{JAR_FILE_PREFIX}/{FLINK_CONNECTOR_KAFKA_JAR};"
+        f"{JAR_FILE_PREFIX}/{FLINK_CONNECTOR_CASSANDRA_JAR};"
+        f"{JAR_FILE_PREFIX}/{FLINK_JSON_JAR}"
     )
     job_name = config.job_name
 
