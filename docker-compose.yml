@@ -18,14 +18,15 @@ services:
       timeout: 5s
       retries: 5
     restart: unless-stopped
+    networks:
+      - cdc-network
   
   # Initialize PostgreSQL database
   postgres-init:
     image: debezium/postgres:14
     platform: linux/amd64
     depends_on:
-      postgres:
-        condition: service_healthy
+      - postgres
     volumes:
       - ./postgres-init.sql:/postgres-init.sql
     command: >
@@ -35,52 +36,42 @@ services:
         echo "PostgreSQL initialization completed successfully."
       '
     restart: on-failure
+    networks:
+      - cdc-network
 
   # Zookeeper for Kafka coordination
   zookeeper:
-    image: confluentinc/cp-zookeeper:7.3.0
+    image: confluentinc/cp-zookeeper:latest
     platform: linux/amd64
     ports:
       - "2181:2181"
     environment:
       ZOOKEEPER_CLIENT_PORT: 2181
       ZOOKEEPER_TICK_TIME: 2000
-      ZOOKEEPER_INIT_LIMIT: 5
-      ZOOKEEPER_SYNC_LIMIT: 2
-      ZOOKEEPER_SERVER_ID: 1
-      KAFKA_OPTS: "-XX:+UseContainerSupport -Djava.awt.headless=true -Dcom.sun.management.jmxremote.authenticate=false -Dcom.sun.management.jmxremote.ssl=false"
-      EXTRA_ARGS: "-Djava.security.egd=file:/dev/./urandom"
-      ZOOKEEPER_SERVERS: zookeeper:2888:3888
-      ZOOKEEPER_MAX_CLIENT_CNXNS: 0
-    volumes:
-      - zookeeper_data:/var/lib/zookeeper/data
-      - zookeeper_log:/var/lib/zookeeper/log
     healthcheck:
       test: echo ruok | nc localhost 2181 || exit 1
       interval: 10s
       timeout: 5s
       retries: 5
-      start_period: 30s
     restart: unless-stopped
+    networks:
+      - cdc-network
 
   kafka:
-    image: confluentinc/cp-kafka:7.3.0
+    image: confluentinc/cp-kafka:latest
     platform: linux/amd64
     depends_on:
-      zookeeper:
-        condition: service_healthy
+      - zookeeper
+    links:
+      - zookeeper
     ports:
-      - "9092:9092"
+      - "29092:29092"
     environment:
       KAFKA_BROKER_ID: 1
-      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
-      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:29092,PLAINTEXT_HOST://localhost:9092
-      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
-      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_ZOOKEEPER_CONNECT: 'zookeeper:2181'
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_INTERNAL:PLAINTEXT
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092,PLAINTEXT_INTERNAL://kafka:29092
       KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
-      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
-      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
-      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
     healthcheck:
       test: nc -z localhost 9092 || exit 1
       interval: 10s
@@ -88,25 +79,41 @@ services:
       retries: 5
       start_period: 30s
     restart: unless-stopped
+    networks:
+      - cdc-network
 
   kafka-init:
-    image: confluentinc/cp-kafka:7.3.0
+    image: confluentinc/cp-kafka:latest
     platform: linux/amd64
     depends_on:
-      kafka:
-        condition: service_healthy
+      - kafka
     command: >
       bash -c '
         echo "Waiting for Kafka to be ready..."
-        cub kafka-ready -b kafka:29092 1 30
+        sleep 15
         echo "Creating Kafka topics..."
-        kafka-topics --bootstrap-server kafka:29092 --create --if-not-exists --topic postgres.codeshard.likes --partitions 3 --replication-factor 1
-        kafka-topics --bootstrap-server kafka:29092 --create --if-not-exists --topic postgres.codeshard.shards --partitions 3 --replication-factor 1
-        kafka-topics --bootstrap-server kafka:29092 --create --if-not-exists --topic postgres.codeshard.followers --partitions 3 --replication-factor 1
-        kafka-topics --bootstrap-server kafka:29092 --create --if-not-exists --topic postgres.codeshard.comments --partitions 3 --replication-factor 1
+        kafka-topics --bootstrap-server kafka:29092 --create --if-not-exists --topic postgres.public.likes --partitions 3 --replication-factor 1
+        kafka-topics --bootstrap-server kafka:29092 --create --if-not-exists --topic postgres.public.shards --partitions 3 --replication-factor 1
+        kafka-topics --bootstrap-server kafka:29092 --create --if-not-exists --topic postgres.public.followers --partitions 3 --replication-factor 1
+        kafka-topics --bootstrap-server kafka:29092 --create --if-not-exists --topic postgres.public.comments --partitions 3 --replication-factor 1
         echo "Kafka topics created successfully"
       '
     restart: on-failure
+    networks:
+      - cdc-network
+  
+  kafdrop:
+    image: obsidiandynamics/kafdrop:latest
+    platform: linux/amd64
+    ports:
+      - 9000:9000
+    networks: 
+      - cdc-network
+    depends_on:
+      - kafka 
+    restart: unless-stopped
+    environment:
+      KAFKA_BROKERCONNECT: kafka:29092
 
   cassandra:
     image: cassandra:4.1
@@ -123,13 +130,14 @@ services:
       timeout: 10s
       retries: 5
     restart: unless-stopped
+    networks:
+      - cdc-network
 
   cassandra-init:
     image: cassandra:4.1
     platform: linux/amd64
     depends_on:
-      cassandra:
-        condition: service_healthy
+      - cassandra
     volumes:
       - ./cassandra-init.cql:/cassandra-init.cql
     command: >
@@ -141,6 +149,8 @@ services:
         echo "Keyspace and tables created."
       '
     restart: on-failure
+    networks:
+      - cdc-network
 
   jobmanager:
     image: flink:1.17
@@ -158,55 +168,41 @@ services:
       timeout: 5s
       retries: 5
     restart: unless-stopped
+    networks:
+      - cdc-network
 
   taskmanager:
     image: flink:1.17
     platform: linux/amd64
     depends_on:
-      jobmanager:
-        condition: service_healthy
+      - jobmanager
     command: taskmanager
     environment:
       - JOB_MANAGER_RPC_ADDRESS=jobmanager
     volumes:
       - ./flink-connectors:/flink-connectors
     restart: unless-stopped
+    networks:
+      - cdc-network
 
-  # Debezium Connect for PostgreSQL CDC
-  debezium-connect:
-    image: debezium/connect:2.5
+  # Debezium Connect for PostgreSQL CDC 
+  connect:
+    image: debezium/connect:2.5.0.Final
     platform: linux/amd64
     ports:
       - "8083:8083"
+    links:
+      - kafka
+      - postgres
     depends_on:
-      kafka:
-        condition: service_healthy
-      postgres:
-        condition: service_healthy
+      - kafka
+      - postgres
     environment:
       - BOOTSTRAP_SERVERS=kafka:29092
       - GROUP_ID=1
       - CONFIG_STORAGE_TOPIC=connect_configs
       - OFFSET_STORAGE_TOPIC=connect_offsets
       - STATUS_STORAGE_TOPIC=connect_statuses
-      - CONNECT_REST_PORT=8083
-      - CONNECT_REST_ADVERTISED_HOST_NAME=debezium-connect
-      - CONNECT_REST_ADVERTISED_PORT=8083
-      - CONNECT_GROUP_ID=1
-      - CONNECT_CONFIG_STORAGE_TOPIC=connect_configs
-      - CONNECT_OFFSET_STORAGE_TOPIC=connect_offsets
-      - CONNECT_STATUS_STORAGE_TOPIC=connect_statuses
-      - CONNECT_KEY_CONVERTER=org.apache.kafka.connect.json.JsonConverter
-      - CONNECT_VALUE_CONVERTER=org.apache.kafka.connect.json.JsonConverter
-      - CONNECT_BOOTSTRAP_SERVERS=kafka:29092
-      - CONNECT_PLUGIN_PATH=/kafka/connect
-    command: >
-      bash -c '
-        echo "Waiting for Kafka to be ready..."
-        cub kafka-ready -b kafka:29092 1 40
-        echo "Starting Debezium Connect..."
-        /docker-entrypoint.sh start
-      '
     healthcheck:
       test: curl -f http://localhost:8083/ || exit 1
       interval: 10s
@@ -214,35 +210,8 @@ services:
       retries: 5
       start_period: 30s
     restart: unless-stopped
-
-  # Debezium Connector Configuration Service
-  debezium-config:
-    image: curlimages/curl:7.83.1
-    platform: linux/amd64
-    depends_on:
-      debezium-connect:
-        condition: service_healthy
-    volumes:
-      - ./debezium-connectors:/connectors
-    command: >
-      sh -c '
-        echo "Waiting for Debezium Connect to be ready..."
-        until curl -s debezium-connect:8083/connectors >/dev/null; do
-          echo "Debezium Connect not ready yet, waiting..."
-          sleep 5
-        done
-        echo "Creating Debezium connectors..."
-        for connector in /connectors/*.json; do
-          if [ -f "$connector" ]; then
-            connector_name=$(basename "$connector" .json)
-            echo "Creating connector: $connector_name"
-            curl -X POST -H "Content-Type: application/json" --data @"$connector" http://debezium-connect:8083/connectors
-          fi
-        done
-        echo "Connectors created successfully."
-      '
-    restart: on-failure
-  
+    networks:
+      - cdc-network
 
   ## Redis 
   redis:
@@ -258,6 +227,8 @@ services:
       timeout: 5s
       retries: 5
     restart: unless-stopped
+    networks:
+      - cdc-network
 
   # FastAPI application
   fastapi:
@@ -268,16 +239,11 @@ services:
     ports:
       - "8000:8000"
     depends_on:
-      kafka:
-        condition: service_healthy
-      cassandra:
-        condition: service_healthy
-      jobmanager:
-        condition: service_healthy
-      debezium-connect:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
+      - kafka
+      - cassandra
+      - jobmanager
+      - connect
+      - redis
     environment:
       - KAFKA_BOOTSTRAP_SERVERS=kafka:29092
       - CASSANDRA_CONTACT_POINTS=cassandra
@@ -289,15 +255,17 @@ services:
       - POSTGRES_USER=postgres
       - POSTGRES_PASSWORD=postgres
       - POSTGRES_DB=codeshard
-      - DEBEZIUM_CONNECT_URL=http://debezium-connect:8083
+      - DEBEZIUM_CONNECT_URL=http://connect:8083
       - REDIS_HOST=redis
       - REDIS_PORT=6379
       - REDIS_DB=0
     restart: unless-stopped
-
+    networks:
+      - cdc-network
+networks:
+  cdc-network:
+    driver: bridge
 volumes:
   cassandra_data:
   postgres_data:
   redis_data:
-  zookeeper_data:
-  zookeeper_log:

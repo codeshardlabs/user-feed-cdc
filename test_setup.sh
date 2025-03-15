@@ -4,16 +4,8 @@ echo "Setting up test scenario..."
 
 # Setup Debezium connector
 echo "Setting up Debezium connector..."
-curl -X POST "http://localhost:8000/setup/debezium" \
-  -H "Content-Type: application/json"
-
-# Get Debezium connector status
-echo -e "\nGetting Debezium connector status..."
-curl -X GET "http://localhost:8083/connectors/postgres-connector/status" \
-  -H "Content-Type: application/json" | json_pp
-
-echo -e "\nWaiting for Debezium connector to initialize..."
-sleep 5
+curl -X GET "http://localhost:8000/debezium/setup" 
+echo -e "\nDebezium connector setup completed!"
 
 # User 3 follows user 2
 echo "Making user 3 follow user 2..."
@@ -28,7 +20,18 @@ echo -e "\nWaiting for follow relationship to be established..."
 sleep 2
 
 echo -e "\nWaiting for CDC to process the changes..."
-sleep 5
+sleep 10
+
+### Setup flink job
+echo "Setting up Flink job..."
+curl -X POST "http://localhost:8000/job/start" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "job_name": "kafka-to-cassandra"
+  }'
+echo -e "\nFlink job setup completed!"
+
+sleep 10
 
 # Get user 1's feed
 echo "Getting user 1's feed (should see user 3's activities)..."

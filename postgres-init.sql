@@ -103,7 +103,7 @@ INSERT INTO "shards" ("id", "user_id", "title", "mode", "type") VALUES
 -- follow users
 INSERT INTO "followers" ("follower_id", "following_id") VALUES 
 ('1', '2'),
-('1', '3'),
-('2', '1'),
-('2', '3'),
-('3', '1');
+('2', '1');-->statement-breakpoint
+
+-- required for debezium
+CREATE PUBLICATION "codeshard_publication" FOR TABLE "likes", "shards", "followers", "comments";

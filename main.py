@@ -8,7 +8,7 @@ from env import  DEBEZIUM_CONNECT_URL, FLINK_REST_API_URL, CASSANDRA_KEYSPACE, C
 from enums import JobName
 import json
 import requests
-from utils import get_kafka_producer, run_flink_job, setup_debezium_connector, get_cassandra_session, get_postgres_connection
+from utils import get_kafka_producer, run_flink_job, setup_debezium_connector, get_cassandra_session, get_postgres_connection, delete_debezium_connector
 from config import FlinkJobConfig, DataRecord, FollowUserRequestBody
 from cache import cache
 import asyncio
@@ -183,6 +183,17 @@ async def setup_debezium():
                 detail=f"Failed to setup debezium connector after {max_retries} attempts: {str(e)}"
             )
 
+@app.delete("/debezium/setup", tags=["debezium"])
+async def delete_debezium():
+    """
+    Delete the Debezium connector.
+    """
+    try:
+        await delete_debezium_connector()
+        return {"status": "success", "message": "Debezium connector deleted successfully"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to delete debezium connector: {str(e)}")
+    
 @app.get("/debezium/status", tags=["debezium"])
 async def get_connector_status():
     """

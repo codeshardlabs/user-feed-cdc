@@ -56,36 +56,93 @@ def run_flink_job(config: FlinkJobConfig):
         # Create a table for each source table
         for table in ['likes', 'shards', 'followers', 'comments']:
             table_env.execute_sql(f"""
-                CREATE TABLE kafka_source_{table} (
-                    user_id STRING,
-                    activity_type STRING,
-                    timestamp BIGINT,
-                    target_id STRING,
-                    target_type STRING,
-                    metadata MAP<STRING, STRING>,
-                    source_table STRING,
+                 CREATE TABLE kafka_source_{table} (
+                    before MAP<STRING, STRING>,
+                    after MAP<STRING, STRING>,
+                    source MAP<STRING, STRING>,
+                    op STRING,
+                    ts_ms BIGINT,
+                    transaction MAP<STRING, STRING>,
                     proctime AS PROCTIME()
                 ) WITH (
                     'connector' = 'kafka',
-                    'topic' = 'postgres.codeshard.{table}',
+                    'topic' = 'postgres.public.{table}',
                     'properties.bootstrap.servers' = '{KAFKA_BOOTSTRAP_SERVERS}',
-                    'properties.group.id' = 'flink-group',
+                    'properties.group.id' = '1',
                     'scan.startup.mode' = 'latest-offset',
                     'format' = 'json'
                 )
             """)
 
-        # Create a view that unions all source tables
+        table_env.execute_sql("""
+            CREATE VIEW transformed_likes AS
+            SELECT
+                after['liked_by'] AS user_id,
+                'like' AS activity_type,
+                ts_ms AS timestamp,
+                after['shard_id'] AS target_id,
+                'shard' AS target_type,
+                CAST(NULL AS MAP<STRING, STRING>) AS metadata,
+                'likes' AS source_table
+            FROM kafka_source_likes
+            WHERE op IN ('c', 'r') AND after IS NOT NULL
+        """)
+
+        table_env.execute_sql("""
+            CREATE VIEW transformed_shards AS
+            SELECT
+                after['user_id'] AS user_id,
+                'create_shard' AS activity_type,
+                ts_ms AS timestamp,
+                after['id'] AS target_id,
+                'shard' AS target_type,
+                MAP['title', after['title'], 'mode', after['mode'], 'type', after['type']] AS metadata,
+                'shards' AS source_table
+            FROM kafka_source_shards
+            WHERE op IN ('c', 'r') AND after IS NOT NULL
+        """)
+
+        table_env.execute_sql("""
+            CREATE VIEW transformed_followers AS
+            SELECT
+                after['follower_id'] AS user_id,
+                'follow' AS activity_type,
+                ts_ms AS timestamp,
+                after['following_id'] AS target_id,
+                'user' AS target_type,
+                CAST(NULL AS MAP<STRING, STRING>) AS metadata,
+                'followers' AS source_table
+            FROM kafka_source_followers
+            WHERE op IN ('c', 'r') AND after IS NOT NULL
+        """)
+
+        table_env.execute_sql("""
+            CREATE VIEW transformed_comments AS
+            SELECT
+                after['user_id'] AS user_id,
+                'comment' AS activity_type,
+                ts_ms AS timestamp,
+                after['shard_id'] AS target_id,
+                'shard' AS target_type,
+                MAP['message', after['message']] AS metadata,
+                'comments' AS source_table
+            FROM kafka_source_comments
+            WHERE op IN ('c', 'r') AND after IS NOT NULL
+        """)
+
+
         table_env.execute_sql("""
             CREATE VIEW kafka_source AS
-            SELECT * FROM kafka_source_likes
+            SELECT * FROM transformed_likes
             UNION ALL
-            SELECT * FROM kafka_source_shards
+            SELECT * FROM transformed_shards
             UNION ALL
-            SELECT * FROM kafka_source_users
+            SELECT * FROM transformed_followers
             UNION ALL
-            SELECT * FROM kafka_source_comments
+            SELECT * FROM transformed_comments
         """)
+
+
 
         table_env.execute_sql(f"""
             CREATE TABLE cassandra_sink (
@@ -180,3 +237,15 @@ async def setup_debezium_connector():
         print(f"Error setting up Debezium connector: {e}")
         raise Exception(f"Failed to set up Debezium connector: {str(e)}")
 
+
+async def delete_debezium_connector():
+    try:
+        response = requests.delete(f"{DEBEZIUM_CONNECT_URL}/connectors/postgres-connector")
+        if response.status_code == 200:
+            print("Debezium connector deleted successfully")
+            return {"status": "success", "message": "Debezium connector deleted successfully"}
+        else:
+            raise Exception(f"Failed to delete connector. Status: {response.status_code}, Response: {response.text}")
+    except Exception as e:
+        print(f"Error deleting Debezium connector: {e}")
+        raise Exception(f"Failed to delete Debezium connector: {str(e)}")
