@@ -11,6 +11,7 @@ from cassandra.auth import PlainTextAuthProvider
 from confluent_kafka import Producer
 from config import FlinkJobConfig
 from logger import logger
+import pathlib
 
 ## Connect to cassandra
 def get_cassandra_session():
@@ -137,29 +138,45 @@ def get_postgres_connection():
         print(f"Error connecting to postgres: {e}")
         raise HTTPException(status_code=500, detail="Failed to connect to postgres : {str(e)}")
     
-def setup_debezium_connector():
+async def setup_debezium_connector():
     try: 
+        # First verify Debezium Connect is available
+        health_check = requests.get(f"{DEBEZIUM_CONNECT_URL}/")
+        if health_check.status_code != 200:
+            raise Exception(f"Debezium Connect is not healthy. Status code: {health_check.status_code}")
+
         with open(DEBEZIUM_CONNECTOR_CONFIG_FILE, "r") as f:
             config = json.load(f)
-            config["config"]["database.hostname"] = POSTGRES_HOST
-            config["config"]["database.port"] = POSTGRES_PORT
-            config["config"]["database.user"] = POSTGRES_USER
-            config["config"]["database.password"] = POSTGRES_PASSWORD
-            config["config"]["database.dbname"] = POSTGRES_DB
-            logger.info(f"Setting up debezium connector with config: {config}")
-            response = requests.get(f"{DEBEZIUM_CONNECT_URL}/connectors/postgres-connector")
-            if response.status_code == 200:
-                logger.info("Debezium connector already exists")
-                return {"status": "success", "message": "Debezium connector already exists"}
-            else:
-                response = requests.post(f"{DEBEZIUM_CONNECT_URL}/connectors", json=config)
-                if response.status_code == 200:
-                    logger.info("Debezium connector created successfully")
-                    return {"status": "success", "message": "Debezium connector created successfully"}
-                else:
-                    logger.error(f"Failed to create debezium connector: {response.json()}")
-                    return {"status": "error", "message": "Failed to create debezium connector"}
+            
+        # Update configuration with environment variables
+        config["config"]["database.hostname"] = POSTGRES_HOST
+        config["config"]["database.port"] = POSTGRES_PORT
+        config["config"]["database.user"] = POSTGRES_USER
+        config["config"]["database.password"] = POSTGRES_PASSWORD
+        config["config"]["database.dbname"] = POSTGRES_DB
+        
+        # Check if connector already exists
+        response = requests.get(f"{DEBEZIUM_CONNECT_URL}/connectors/postgres-connector")
+        if response.status_code == 200:
+            print("Debezium connector already exists")
+            return {"status": "success", "message": "Debezium connector already exists"}
+            
+        # Create new connector
+        response = requests.post(
+            f"{DEBEZIUM_CONNECT_URL}/connectors",
+            headers={"Content-Type": "application/json"},
+            json=config
+        )
+        
+        if response.status_code not in [200, 201]:
+            raise Exception(f"Failed to create connector. Status: {response.status_code}, Response: {response.text}")
+            
+        return {"status": "success", "message": "Debezium connector created successfully"}
+        
+    except requests.exceptions.ConnectionError as e:
+        print(f"Connection error to Debezium Connect: {e}")
+        raise Exception(f"Failed to connect to Debezium Connect: {str(e)}")
     except Exception as e:
-        logger.error(f"Error setting debezium connector: {e}")
-        raise HTTPException(status_code=500, detail="Failed to set debezium connector : {str(e)}")
+        print(f"Error setting up Debezium connector: {e}")
+        raise Exception(f"Failed to set up Debezium connector: {str(e)}")
 

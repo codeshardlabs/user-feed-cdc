@@ -20,7 +20,7 @@ POSTGRES_DB = os.environ.get("POSTGRES_DB", "codeshard")
 
 ### Debezium Connector
 DEBEZIUM_CONNECT_URL = os.environ.get("DEBEZIUM_CONNECT_URL", "http://debezium-connect:8083")
-DEBEZIUM_CONNECTOR_CONFIG_FILE = os.environ.get("DEBEZIUM_CONNECTOR_CONFIG_FILE", "debezium-postgres-connector.config.json")
+DEBEZIUM_CONNECTOR_CONFIG_FILE = os.environ.get("DEBEZIUM_CONNECTOR_CONFIG_FILE", "debezium-connectors/debezium-postgres-connector.config.json")
 
 ### Flink
 FLINK_REST_API_URL = os.environ.get("FLINK_REST_API_URL", "http://jobmanager:8081")

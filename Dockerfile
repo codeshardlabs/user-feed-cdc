@@ -18,8 +18,8 @@ ENV PYTHONUNBUFFERED=1 \
     JAVA_HOME=/usr/lib/jvm/temurin-11-jre-amd64
 
 # Create and activate virtual environment
-RUN python -m venv /opt/venv
-ENV PATH="/opt/venv/bin:$PATH"
+RUN python -m venv /venv
+ENV PATH="/venv/bin:$PATH"
 
 # Create directory for Flink connector JARs
 RUN mkdir -p /flink-connectors
@@ -34,4 +34,5 @@ COPY debezium-connectors/ /debezium-connectors/
 COPY . .
 
 # Command to run
+EXPOSE 8000
 CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]

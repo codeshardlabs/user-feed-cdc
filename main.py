@@ -11,6 +11,7 @@ import requests
 from utils import get_kafka_producer, run_flink_job, setup_debezium_connector, get_cassandra_session, get_postgres_connection
 from config import FlinkJobConfig, DataRecord, FollowUserRequestBody
 from cache import cache
+import asyncio
 
 app = FastAPI(title="user-feed")
 
@@ -164,11 +165,23 @@ async def setup_debezium():
     This creates a Debezium connector that monitors the PostgreSQL database
     for changes and publishes them to Kafka topics.
     """
-    try:
-        result = await setup_debezium_connector()
-        return {"data" : result, "status": "success", "message": "Debezium connector setup completed"}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to setup debezium connector: {str(e)}")
+    max_retries = 5
+    retry_delay = 5  # seconds
+    
+    for attempt in range(max_retries):
+        try:
+            result = await setup_debezium_connector()
+            return {"data": result, "status": "success", "message": "Debezium connector setup completed"}
+        except Exception as e:
+            if attempt < max_retries - 1:
+                print(f"Attempt {attempt + 1} failed. Retrying in {retry_delay} seconds...")
+                await asyncio.sleep(retry_delay)
+                continue
+            print(f"Error setting up debezium connector after {max_retries} attempts: {e}")
+            raise HTTPException(
+                status_code=500,
+                detail=f"Failed to setup debezium connector after {max_retries} attempts: {str(e)}"
+            )
 
 @app.get("/debezium/status", tags=["debezium"])
 async def get_connector_status():

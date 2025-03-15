@@ -1,4 +1,3 @@
-
 services:
   # PostgreSQL database for source data
   postgres:
@@ -41,15 +40,27 @@ services:
   zookeeper:
     image: confluentinc/cp-zookeeper:7.3.0
     platform: linux/amd64
-    environment:
-      ZOOKEEPER_CLIENT_PORT: 2181
     ports:
       - "2181:2181"
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+      ZOOKEEPER_INIT_LIMIT: 5
+      ZOOKEEPER_SYNC_LIMIT: 2
+      ZOOKEEPER_SERVER_ID: 1
+      KAFKA_OPTS: "-XX:+UseContainerSupport -Djava.awt.headless=true -Dcom.sun.management.jmxremote.authenticate=false -Dcom.sun.management.jmxremote.ssl=false"
+      EXTRA_ARGS: "-Djava.security.egd=file:/dev/./urandom"
+      ZOOKEEPER_SERVERS: zookeeper:2888:3888
+      ZOOKEEPER_MAX_CLIENT_CNXNS: 0
+    volumes:
+      - zookeeper_data:/var/lib/zookeeper/data
+      - zookeeper_log:/var/lib/zookeeper/log
     healthcheck:
-      test: ["CMD", "bash", "-c", "echo ruok | nc localhost 2181"]
+      test: echo ruok | nc localhost 2181 || exit 1
       interval: 10s
       timeout: 5s
       retries: 5
+      start_period: 30s
     restart: unless-stopped
 
   kafka:
@@ -63,16 +74,19 @@ services:
     environment:
       KAFKA_BROKER_ID: 1
       KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
-      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:29092,PLAINTEXT_HOST://kafka:9092
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:29092,PLAINTEXT_HOST://localhost:9092
       KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
       KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
       KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
       KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
     healthcheck:
-      test: ["CMD", "kafka-topics", "--bootstrap-server", "localhost:9092", "--list"]
+      test: nc -z localhost 9092 || exit 1
       interval: 10s
       timeout: 5s
       retries: 5
+      start_period: 30s
     restart: unless-stopped
 
   kafka-init:
@@ -84,12 +98,13 @@ services:
     command: >
       bash -c '
         echo "Waiting for Kafka to be ready..."
-        sleep 10
+        cub kafka-ready -b kafka:29092 1 30
+        echo "Creating Kafka topics..."
         kafka-topics --bootstrap-server kafka:29092 --create --if-not-exists --topic postgres.codeshard.likes --partitions 3 --replication-factor 1
         kafka-topics --bootstrap-server kafka:29092 --create --if-not-exists --topic postgres.codeshard.shards --partitions 3 --replication-factor 1
         kafka-topics --bootstrap-server kafka:29092 --create --if-not-exists --topic postgres.codeshard.followers --partitions 3 --replication-factor 1
         kafka-topics --bootstrap-server kafka:29092 --create --if-not-exists --topic postgres.codeshard.comments --partitions 3 --replication-factor 1
-        echo "Kafka topics created"
+        echo "Kafka topics created successfully"
       '
     restart: on-failure
 
@@ -174,13 +189,33 @@ services:
       - CONFIG_STORAGE_TOPIC=connect_configs
       - OFFSET_STORAGE_TOPIC=connect_offsets
       - STATUS_STORAGE_TOPIC=connect_statuses
+      - CONNECT_REST_PORT=8083
+      - CONNECT_REST_ADVERTISED_HOST_NAME=debezium-connect
+      - CONNECT_REST_ADVERTISED_PORT=8083
+      - CONNECT_GROUP_ID=1
+      - CONNECT_CONFIG_STORAGE_TOPIC=connect_configs
+      - CONNECT_OFFSET_STORAGE_TOPIC=connect_offsets
+      - CONNECT_STATUS_STORAGE_TOPIC=connect_statuses
+      - CONNECT_KEY_CONVERTER=org.apache.kafka.connect.json.JsonConverter
+      - CONNECT_VALUE_CONVERTER=org.apache.kafka.connect.json.JsonConverter
+      - CONNECT_BOOTSTRAP_SERVERS=kafka:29092
+      - CONNECT_PLUGIN_PATH=/kafka/connect
+    command: >
+      bash -c '
+        echo "Waiting for Kafka to be ready..."
+        cub kafka-ready -b kafka:29092 1 40
+        echo "Starting Debezium Connect..."
+        /docker-entrypoint.sh start
+      '
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8083/"]
+      test: curl -f http://localhost:8083/ || exit 1
       interval: 10s
       timeout: 5s
       retries: 5
+      start_period: 30s
     restart: unless-stopped
 
+  # Debezium Connector Configuration Service
   debezium-config:
     image: curlimages/curl:7.83.1
     platform: linux/amd64
@@ -264,3 +299,5 @@ volumes:
   cassandra_data:
   postgres_data:
   redis_data:
+  zookeeper_data:
+  zookeeper_log:
