@@ -1,6 +1,8 @@
 from pyflink.datastream import StreamExecutionEnvironment, CheckpointingMode
-from pyflink.table import EnvironmentSettings, StreamTableEnvironment  
-from env import CASSANDRA_CONTACT_POINTS, CASSANDRA_PORT, CASSANDRA_KEYSPACE, CASSANDRA_TABLE, CASSANDRA_USERNAME, CASSANDRA_PASSWORD, KAFKA_BOOTSTRAP_SERVERS, POSTGRES_HOST, POSTGRES_PORT, POSTGRES_USER, POSTGRES_PASSWORD, POSTGRES_DB, DEBEZIUM_CONNECT_URL, DEBEZIUM_CONNECTOR_CONFIG_FILE, FLINK_CONNECTOR_KAFKA_JAR, FLINK_CONNECTOR_CASSANDRA_JAR, FLINK_JSON_JAR
+from pyflink.table import EnvironmentSettings, StreamTableEnvironment
+from pyflink.common.typeinfo import Types
+from pyflink.datastream.connectors.cassandra import CassandraSink
+from env import CASSANDRA_CONTACT_POINTS, CASSANDRA_PORT, CASSANDRA_USERNAME, CASSANDRA_PASSWORD, KAFKA_BOOTSTRAP_SERVERS, POSTGRES_HOST, POSTGRES_PORT, POSTGRES_USER, POSTGRES_PASSWORD, POSTGRES_DB, DEBEZIUM_CONNECT_URL, DEBEZIUM_CONNECTOR_CONFIG_FILE, FLINK_CONNECTOR_KAFKA_JAR, FLINK_CONNECTOR_CASSANDRA_JAR, FLINK_JSON_JAR, KAFKA_CLIENT_JAR
 import psycopg2
 import json
 import requests
@@ -45,22 +47,34 @@ def run_flink_job(config: FlinkJobConfig):
     table_env = StreamTableEnvironment.create(env, environment_settings=settings)
 
     ### add reqd. jar files
-    JAR_FILE_PREFIX = "file:/flink-connectors"
+    JAR_FILE_PREFIX = "file:///flink-connectors"
+    jar_paths = [
+        f"{JAR_FILE_PREFIX}/{FLINK_CONNECTOR_KAFKA_JAR}",
+        f"{JAR_FILE_PREFIX}/{FLINK_CONNECTOR_CASSANDRA_JAR}",
+        f"{JAR_FILE_PREFIX}/{FLINK_JSON_JAR};",
+        f"{JAR_FILE_PREFIX}/{KAFKA_CLIENT_JAR}"
+    ]
+    logger.info(f"JAR paths: {jar_paths}")      
+
+   # Then join them with semicolons
+    jar_paths_str = ";".join(jar_paths)
+    logger.info(f"Final pipeline.jars value: {jar_paths_str}")
     table_env.get_config().get_configuration().set_string(
         "pipeline.jars", 
-        f"{JAR_FILE_PREFIX}/{FLINK_CONNECTOR_KAFKA_JAR};"
-        f"{JAR_FILE_PREFIX}/{FLINK_CONNECTOR_CASSANDRA_JAR};"
-        f"{JAR_FILE_PREFIX}/{FLINK_JSON_JAR}"
+        jar_paths_str
     )
     job_name = config.job_name
 
     if config.job_name == JobName.KAFKA_TO_CASSANDRA.value:
         strategy_factory = DataStreamAdaptorStrategyFactory()
         for activity_type in ActivityType:
+
             strategy = strategy_factory.get_strategy(activity_type)
             table_env.execute_sql(strategy.get_create_table_query())
             table_env.execute_sql(strategy.get_transform_data_query())
+            logger.info(f"Created table for {activity_type}")
 
+        logger.info("Creating kafka source")
 
         table_env.execute_sql("""
             CREATE VIEW kafka_source AS
@@ -73,56 +87,37 @@ def run_flink_job(config: FlinkJobConfig):
             SELECT * FROM transformed_comments
         """)
 
-
-
-        # table_env.execute_sql(f"""
-        #     CREATE TABLE cassandra_sink (
-        #         user_id STRING,
-        #         activity_id STRING,
-        #         activity_type STRING,
-        #         event_timestamp TIMESTAMP(3),
-        #         target_id STRING,
-        #         target_type STRING,
-        #         metadata MAP<STRING, STRING>,
-        #         PRIMARY KEY (user_id, activity_id) NOT ENFORCED
-        #     ) WITH (
-        #         'connector' = 'cassandra',
-        #         'hosts' = '{CASSANDRA_CONTACT_POINTS}',
-        #         'port' = '{CASSANDRA_PORT}',
-        #         'keyspace' = '{CASSANDRA_KEYSPACE}',
-        #         'table' = '{CASSANDRA_TABLE}',
-        #         'username' = '{CASSANDRA_USERNAME}',
-        #         'password' = '{CASSANDRA_PASSWORD}'
-        #     )
-        # """)
-
-        table_env.execute_sql(f"""
-            CREATE TABLE print_sink (
-                user_id STRING,
-                activity_id STRING,
-                activity_type STRING,
-                event_timestamp TIMESTAMP(3),
-                target_id STRING,
-                target_type STRING,
-                metadata MAP<STRING, STRING>,
-                PRIMARY KEY (user_id, activity_id) NOT ENFORCED
-            ) WITH (
-                'connector' = 'print'
-            )
-        """)
-
-        table_env.execute_sql(f"""
-            INSERT INTO print_sink
+        result_table = table_env.sql_query("""
             SELECT 
                 user_id,
                 CAST(UUID() AS STRING) AS activity_id,
                 activity_type,
-                TO_TIMESTAMP(FROM_UNIXTIME(event_timestamp / 1000)),
+                TO_TIMESTAMP(FROM_UNIXTIME(event_timestamp / 1000)) AS event_timestamp,
                 target_id,
                 target_type,
                 metadata
             FROM kafka_source
-        """).wait()
+        """)
+
+        data_stream = table_env.to_append_stream(
+            result_table, 
+            Types.ROW([
+                Types.STRING(), Types.STRING(), Types.STRING(), 
+                Types.SQL_TIMESTAMP(), Types.STRING(), Types.STRING(),
+                Types.MAP(Types.STRING(), Types.STRING())
+            ])
+        )
+        data_stream.add_sink(
+            CassandraSink.add_sink(data_stream)
+            .set_host("cassandra", 9042)
+            .set_query("INSERT INTO codeshard.user_activity (user_id, activity_id, activity_type, event_timestamp, target_id, target_type, metadata) VALUES (?, ?, ?, ?, ?, ?, ?)")
+            .build()
+        )
+        env.execute("Kafka to Cassandra Job")
+        logger.info("Created cassandra sink view")
+        
+
+      
     else:
         raise ValueError(f"Invalid job name: {job_name}")
 

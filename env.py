@@ -1,7 +1,7 @@
 import os
 
 ### Cassandra
-CASSANDRA_CONTACT_POINTS = os.environ.get("CASSANDRA_CONTACT_POINTS", "localhost").split(",")
+CASSANDRA_CONTACT_POINTS = os.environ.get("CASSANDRA_CONTACT_POINTS", "cassandra")
 CASSANDRA_PORT = int(os.environ.get("CASSANDRA_PORT", "9042"))
 CASSANDRA_KEYSPACE = os.environ.get("CASSANDRA_KEYSPACE", "codeshard")
 CASSANDRA_TABLE = os.environ.get("CASSANDRA_TABLE", "user_activity")
@@ -27,6 +27,7 @@ FLINK_REST_API_URL = os.environ.get("FLINK_REST_API_URL", "http://jobmanager:808
 FLINK_CONNECTOR_CASSANDRA_JAR = os.environ.get("FLINK_CONNECTOR_CASSANDRA_JAR", "flink-connector-cassandra_2.12-3.1.0-1.17.jar")
 FLINK_CONNECTOR_KAFKA_JAR = os.environ.get("FLINK_CONNECTOR_KAFKA_JAR", "flink-connector-kafka-1.17.0.jar")
 FLINK_JSON_JAR = os.environ.get("FLINK_JSON_JAR", "flink-json-1.17.0.jar")
+KAFKA_CLIENT_JAR = os.environ.get("KAFKA_CLIENT_JAR", "kafka-clients-3.8.0.jar")
 
 ### Redis
 REDIS_HOST = os.environ.get("REDIS_HOST", "localhost")

@@ -56,7 +56,7 @@ async def send_activity(data: DataRecord):
     
 
 @app.post("/job/start", tags=["flink"])
-def start_job(config: FlinkJobConfig, background_tasks: BackgroundTasks):
+def start_job(config: FlinkJobConfig):
     """
     Start a flink job with the given configuration
     The job will be started in the background and the response will return immediately
@@ -66,8 +66,8 @@ def start_job(config: FlinkJobConfig, background_tasks: BackgroundTasks):
         valid_job_names = [job.value for job in JobName]
         if config.job_name not in valid_job_names:
             raise HTTPException(status_code=400, detail=f"Invalid job name: {config.job_name}")
-        
-        background_tasks.add_task(run_flink_job, config)
+        run_flink_job(config);
+        # background_tasks.add_task(run_flink_job, config)
         return {"status": "success", "message": f"Job {config.job_name} started"}
     except Exception as e:
         print(f"Error starting job: {e}")

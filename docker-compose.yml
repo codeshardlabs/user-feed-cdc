@@ -116,39 +116,25 @@ services:
       KAFKA_BROKERCONNECT: kafka:29092
 
   cassandra:
-    image: cassandra:4.1
+    image: cassandra:4.0
     platform: linux/amd64
     ports:
       - "9042:9042"
     environment:
+      - HEAP_NEWSIZE=128m
+      - MAX_HEAP_SIZE=256m
       - CASSANDRA_CLUSTER_NAME=flink_cluster
-      - MAX_HEAP_SIZE=512M
-      - HEAP_NEWSIZE=128M
-      - CASSANDRA_LISTEN_ADDRESS=cassandra
-      - CASSANDRA_BROADCAST_ADDRESS=cassandra
-      - CASSANDRA_RPC_ADDRESS=0.0.0.0
-      - CASSANDRA_START_RPC=true
-      - CASSANDRA_SEEDS=cassandra
+      - CASSANDRA_DC=datacenter1
+      - CASSANDRA_RACK=rack1
+      - CASSANDRA_ENDPOINT_SNITCH=SimpleSnitch
     volumes:
       - cassandra_data:/var/lib/cassandra
-    ulimits:
-      memlock: -1
-      nproc: 32768
-      nofile:
-        soft: 100000
-        hard: 100000
-    healthcheck:
-      test: ["CMD-SHELL", "[ $$(nodetool statusgossip) = running ]"]
-      interval: 30s
-      timeout: 10s
-      retries: 5
-      start_period: 60s
     restart: unless-stopped
     networks:
       - cdc-network
 
   cassandra-init:
-    image: cassandra:4.1
+    image: cassandra:4.0
     platform: linux/amd64
     depends_on:
       cassandra:
@@ -158,9 +144,9 @@ services:
     command: >
       bash -c '
         echo "Waiting for Cassandra to be ready..."
-        until cqlsh cassandra -e "describe keyspaces" >/dev/null 2>&1; do
+        while ! cqlsh cassandra; do
           echo "Cassandra is unavailable - sleeping"
-          sleep 5
+          sleep 2
         done
         echo "Creating keyspace and tables..."
         cqlsh cassandra -f /cassandra-init.cql
@@ -279,6 +265,10 @@ services:
       - REDIS_HOST=redis
       - REDIS_PORT=6379
       - REDIS_DB=0
+      - FLINK_REST_API_URL=http://jobmanager:8081
+      - FLINK_CONNECTOR_CASSANDRA_JAR=flink-connector-cassandra_2.12-3.1.0-1.17.jar
+      - FLINK_CONNECTOR_KAFKA_JAR=flink-connector-kafka-1.17.0.jar
+      - FLINK_JSON_JAR=flink-json-1.17.0.jar
     restart: unless-stopped
     networks:
       - cdc-network
