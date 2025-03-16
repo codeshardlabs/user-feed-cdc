@@ -7,13 +7,13 @@ echo "Setting up Debezium connector..."
 curl -X GET "http://localhost:8000/debezium/setup" 
 echo -e "\nDebezium connector setup completed!"
 
-# User 3 follows user 2
-echo "Making user 3 follow user 2..."
+# User 2 follows user 1
+echo "Making user 2 follow user 1..."
 curl -X POST "http://localhost:8000/follow/user" \
   -H "Content-Type: application/json" \
   -d '{
-    "user_id": "3",
-    "other_user_id": "2"
+    "user_id": "2",
+    "other_user_id": "1"
   }'
 
 echo -e "\nWaiting for follow relationship to be established..."
@@ -34,7 +34,7 @@ echo -e "\nFlink job setup completed!"
 sleep 10
 
 # Get user 1's feed
-echo "Getting user 1's feed (should see user 3's activities)..."
+echo "Getting user 1's feed (should see user 2's activities)..."
 curl -X GET "http://localhost:8000/cassandra/activities?user_id=1&limit=10" \
   -H "Content-Type: application/json" | json_pp
 
