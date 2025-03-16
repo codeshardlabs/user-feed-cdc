@@ -122,13 +122,27 @@ services:
       - "9042:9042"
     environment:
       - CASSANDRA_CLUSTER_NAME=flink_cluster
+      - MAX_HEAP_SIZE=512M
+      - HEAP_NEWSIZE=128M
+      - CASSANDRA_LISTEN_ADDRESS=cassandra
+      - CASSANDRA_BROADCAST_ADDRESS=cassandra
+      - CASSANDRA_RPC_ADDRESS=0.0.0.0
+      - CASSANDRA_START_RPC=true
+      - CASSANDRA_SEEDS=cassandra
     volumes:
       - cassandra_data:/var/lib/cassandra
+    ulimits:
+      memlock: -1
+      nproc: 32768
+      nofile:
+        soft: 100000
+        hard: 100000
     healthcheck:
-      test: ["CMD", "cqlsh", "-e", "describe keyspaces"]
-      interval: 20s
+      test: ["CMD-SHELL", "[ $$(nodetool statusgossip) = running ]"]
+      interval: 30s
       timeout: 10s
       retries: 5
+      start_period: 60s
     restart: unless-stopped
     networks:
       - cdc-network
@@ -137,13 +151,17 @@ services:
     image: cassandra:4.1
     platform: linux/amd64
     depends_on:
-      - cassandra
+      cassandra:
+        condition: service_healthy
     volumes:
       - ./cassandra-init.cql:/cassandra-init.cql
     command: >
       bash -c '
         echo "Waiting for Cassandra to be ready..."
-        sleep 30
+        until cqlsh cassandra -e "describe keyspaces" >/dev/null 2>&1; do
+          echo "Cassandra is unavailable - sleeping"
+          sleep 5
+        done
         echo "Creating keyspace and tables..."
         cqlsh cassandra -f /cassandra-init.cql
         echo "Keyspace and tables created."
@@ -250,6 +268,8 @@ services:
       - CASSANDRA_PORT=9042
       - CASSANDRA_KEYSPACE=codeshard
       - CASSANDRA_TABLE=user_activity
+      - CASSANDRA_USERNAME=cassandra
+      - CASSANDRA_PASSWORD=cassandra
       - POSTGRES_HOST=postgres
       - POSTGRES_PORT=5432
       - POSTGRES_USER=postgres

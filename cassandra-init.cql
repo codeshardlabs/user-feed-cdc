@@ -7,7 +7,7 @@ CREATE TABLE IF NOT EXISTS codeshard.user_activity (
     user_id UUID,
     activity_id TIMEUUID,
     activity_type TEXT,
-    timestamp TIMESTAMP,
+    event_timestamp TIMESTAMP,
     target_id UUID,
     target_type TEXT,
     metadata MAP<TEXT, TEXT>,

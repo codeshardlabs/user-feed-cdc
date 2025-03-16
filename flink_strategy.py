@@ -17,6 +17,7 @@ class DataStreamAdaptorStrategy(ABC):
     
 class DataStreamAdaptorStrategy1(DataStreamAdaptorStrategy): 
     def __init__(self): 
+        logger.info("Initializing DataStreamAdaptorStrategy1")
         self.activity_type = ActivityType.FOLLOW.value
         self.table_name = TableName.FOLLOWERS.value
         self.kafka_topic = f"postgres.public.{self.table_name}"
@@ -53,13 +54,13 @@ class DataStreamAdaptorStrategy1(DataStreamAdaptorStrategy):
             SELECT
                 follower_id AS user_id,
                 '{self.activity_type}' AS activity_type,
-                __source_ts_ms AS timestamp,
+                __source_ts_ms AS event_timestamp,
                 following_id AS target_id,
                 'user' AS target_type,
                 CAST(MAP[
                     'source_table', '{self.table_name}',
                     'activity_type', '{self.activity_type}'
-                ]  AS MAP<STRING, STRING>) AS \metadata,
+                ]  AS MAP<STRING, STRING>) AS metadata,
                 '{self.table_name}' AS source_table
             FROM kafka_source_{self.table_name}
             WHERE __op IN ('c', 'r') AND __deleted = FALSE
@@ -67,6 +68,7 @@ class DataStreamAdaptorStrategy1(DataStreamAdaptorStrategy):
     
 class DataStreamAdaptorStrategy2(DataStreamAdaptorStrategy): 
     def __init__(self): 
+        logger.info("Initializing DataStreamAdaptorStrategy2")
         self.activity_type = ActivityType.LIKE.value
         self.table_name = TableName.LIKES.value
         self.kafka_topic = f"postgres.public.{self.table_name}"
@@ -75,9 +77,9 @@ class DataStreamAdaptorStrategy2(DataStreamAdaptorStrategy):
         logger.info(f"get_create_table_query for {self.table_name}: invoked")
         return f"""
             CREATE TABLE kafka_source_{self.table_name} (
-                id STRING, 
+                id INT, 
                 user_id STRING,
-                shard_id STRING,
+                shard_id INT,
                 created_at BIGINT,
                 updated_at BIGINT,
                 __deleted BOOLEAN, 
@@ -102,13 +104,13 @@ class DataStreamAdaptorStrategy2(DataStreamAdaptorStrategy):
             SELECT
                 user_id AS user_id,
                 '{self.activity_type}' AS activity_type,
-                __source_ts_ms AS timestamp,
-                shard_id AS target_id,  
+                __source_ts_ms AS event_timestamp,
+                CAST(shard_id AS STRING) AS target_id,  
                 'shard' AS target_type,
                 CAST(MAP[
                     'source_table', '{self.table_name}',
                     'activity_type', '{self.activity_type}'
-                ]  AS MAP<STRING, STRING>) AS \metadata,
+                ]  AS MAP<STRING, STRING>) AS metadata,
                 '{self.table_name}' AS source_table
             FROM kafka_source_{self.table_name}
             WHERE __op IN ('c', 'r') AND __deleted = FALSE
@@ -116,6 +118,7 @@ class DataStreamAdaptorStrategy2(DataStreamAdaptorStrategy):
     
 class DataStreamAdaptorStrategy3(DataStreamAdaptorStrategy): 
     def __init__(self): 
+        logger.info("Initializing DataStreamAdaptorStrategy3")
         self.activity_type = ActivityType.COMMENT.value
         self.table_name = TableName.COMMENTS.value
         self.kafka_topic = f"postgres.public.{self.table_name}"
@@ -124,9 +127,9 @@ class DataStreamAdaptorStrategy3(DataStreamAdaptorStrategy):
         logger.info(f"get_create_table_query for {self.table_name}: invoked")
         return f"""
             CREATE TABLE kafka_source_{self.table_name} (
-                id STRING, 
+                id INT, 
                 user_id STRING,
-                shard_id STRING,
+                shard_id INT,
                 content STRING,
                 created_at BIGINT,
                 updated_at BIGINT,
@@ -152,13 +155,15 @@ class DataStreamAdaptorStrategy3(DataStreamAdaptorStrategy):
             SELECT
                 user_id AS user_id,
                 '{self.activity_type}' AS activity_type,
-                __source_ts_ms AS timestamp,
-                shard_id AS target_id,
-                'shard' AS target_type,
+                __source_ts_ms AS event_timestamp,
+                CAST(id AS STRING) AS target_id,
+                'comment' AS target_type,
                 CAST(MAP[
                     'source_table', '{self.table_name}',
-                    'activity_type', '{self.activity_type}'
-                ]  AS MAP<STRING, STRING>) AS \metadata,
+                    'activity_type', '{self.activity_type}',
+                    'content', content,
+                    'shard_id', CAST(shard_id AS STRING)
+                ]  AS MAP<STRING, STRING>) AS metadata,
                 '{self.table_name}' AS source_table
             FROM kafka_source_{self.table_name}
             WHERE __op IN ('c', 'r') AND __deleted = FALSE
@@ -166,6 +171,7 @@ class DataStreamAdaptorStrategy3(DataStreamAdaptorStrategy):
     
 class DataStreamAdaptorStrategy4(DataStreamAdaptorStrategy): 
     def __init__(self): 
+        logger.info("Initializing DataStreamAdaptorStrategy4")
         self.activity_type = ActivityType.SHARD.value
         self.table_name = TableName.SHARDS.value
         self.kafka_topic = f"postgres.public.{self.table_name}"
@@ -174,7 +180,7 @@ class DataStreamAdaptorStrategy4(DataStreamAdaptorStrategy):
         logger.info(f"get_create_table_query for {self.table_name}: invoked")
         return f"""
             CREATE TABLE kafka_source_{self.table_name} (
-                id STRING, 
+                id INT, 
                 user_id STRING,
                 title STRING,
                 mode STRING,
@@ -203,13 +209,16 @@ class DataStreamAdaptorStrategy4(DataStreamAdaptorStrategy):
             SELECT  
                 user_id AS user_id,
                 '{self.activity_type}' AS activity_type,
-                __source_ts_ms AS timestamp,
-                id AS target_id,
+                __source_ts_ms AS event_timestamp, 
+                CAST(id AS STRING) AS target_id,
                 'shard' AS target_type,
                 CAST(MAP[
                     'source_table', '{self.table_name}',
-                    'activity_type', '{self.activity_type}'
-                ]  AS MAP<STRING, STRING>) AS \metadata,
+                    'activity_type', '{self.activity_type}',
+                    'title', title,
+                    'mode', mode,
+                    'type', type
+                ]  AS MAP<STRING, STRING>) AS metadata,
                 '{self.table_name}' AS source_table
             FROM kafka_source_{self.table_name}
             WHERE __op IN ('c', 'r') AND __deleted = FALSE
