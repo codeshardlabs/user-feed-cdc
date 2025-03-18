@@ -107,12 +107,11 @@ def run_flink_job(config: FlinkJobConfig):
                 Types.MAP(Types.STRING(), Types.STRING())
             ])
         )
-        data_stream.add_sink(
-            CassandraSink.add_sink(data_stream)
-            .set_host("cassandra", 9042)
-            .set_query("INSERT INTO codeshard.user_activity (user_id, activity_id, activity_type, event_timestamp, target_id, target_type, metadata) VALUES (?, ?, ?, ?, ?, ?, ?)")
+        
+        CassandraSink.add_sink(data_stream) \
+            .set_host("cassandra", 9042) \
+            .set_query("INSERT INTO codeshard.user_activity (user_id, activity_id, activity_type, event_timestamp, target_id, target_type, metadata) VALUES (?, ?, ?, ?, ?, ?, ?)") \
             .build()
-        )
         env.execute("Kafka to Cassandra Job")
         logger.info("Created cassandra sink view")
         

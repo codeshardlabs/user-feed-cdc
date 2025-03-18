@@ -281,6 +281,9 @@ services:
       - FLINK_CONNECTOR_KAFKA_JAR=flink-connector-kafka-1.17.0.jar
       - FLINK_JSON_JAR=flink-json-1.17.0.jar
       - KAFKA_CLIENT_JAR=kafka-clients-3.8.0.jar
+      - FLINK_CASSANDRA_CONNECTOR_VERSION=3.1.0
+      - FLINK_CASSANDRA_CONNECTOR_SCALA_VERSION=2.12
+      - FLINK_CASSANDRA_CONNECTOR_FLINK_VERSION=1.17
     restart: unless-stopped
     networks:
       - cdc-network
