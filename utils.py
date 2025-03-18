@@ -51,12 +51,12 @@ def run_flink_job(config: FlinkJobConfig):
     jar_paths = [
         f"{JAR_FILE_PREFIX}/{FLINK_CONNECTOR_KAFKA_JAR}",
         f"{JAR_FILE_PREFIX}/{FLINK_CONNECTOR_CASSANDRA_JAR}",
-        f"{JAR_FILE_PREFIX}/{FLINK_JSON_JAR};",
+        f"{JAR_FILE_PREFIX}/{FLINK_JSON_JAR}",
         f"{JAR_FILE_PREFIX}/{KAFKA_CLIENT_JAR}"
     ]
     logger.info(f"JAR paths: {jar_paths}")      
 
-   # Then join them with semicolons
+    # Then join them with semicolons
     jar_paths_str = ";".join(jar_paths)
     logger.info(f"Final pipeline.jars value: {jar_paths_str}")
     table_env.get_config().get_configuration().set_string(

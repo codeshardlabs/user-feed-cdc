@@ -129,6 +129,16 @@ services:
       - CASSANDRA_ENDPOINT_SNITCH=SimpleSnitch
     volumes:
       - cassandra_data:/var/lib/cassandra
+    healthcheck:
+      test: ["CMD-SHELL", "cqlsh -e 'SHOW VERSION' || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 120s
+    ulimits:
+      memlock: -1
+      nofile: 100000
+    privileged: true
     restart: unless-stopped
     networks:
       - cdc-network
@@ -144,9 +154,10 @@ services:
     command: >
       bash -c '
         echo "Waiting for Cassandra to be ready..."
+        sleep 30
         while ! cqlsh cassandra; do
           echo "Cassandra is unavailable - sleeping"
-          sleep 2
+          sleep 5
         done
         echo "Creating keyspace and tables..."
         cqlsh cassandra -f /cassandra-init.cql
@@ -269,6 +280,7 @@ services:
       - FLINK_CONNECTOR_CASSANDRA_JAR=flink-connector-cassandra_2.12-3.1.0-1.17.jar
       - FLINK_CONNECTOR_KAFKA_JAR=flink-connector-kafka-1.17.0.jar
       - FLINK_JSON_JAR=flink-json-1.17.0.jar
+      - KAFKA_CLIENT_JAR=kafka-clients-3.8.0.jar
     restart: unless-stopped
     networks:
       - cdc-network
