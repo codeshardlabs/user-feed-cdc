@@ -238,3 +238,4 @@ class DataStreamAdaptorStrategyFactory:
         else: 
             logger.error(f"No strategy found for activity type: {activity_type}")
             raise ValueError(f"No strategy found for activity type: {activity_type}")
+        
