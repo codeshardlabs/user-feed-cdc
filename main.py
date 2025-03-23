@@ -1,18 +1,67 @@
-from fastapi import FastAPI, HTTPException, BackgroundTasks
+from fastapi import FastAPI, HTTPException, BackgroundTasks, status
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
+from contextlib import asynccontextmanager
 from typing import Union, Optional, Dict
 import os
 from confluent_kafka import Producer
 from pydantic import BaseModel
-from env import  DEBEZIUM_CONNECT_URL, CASSANDRA_KEYSPACE, CASSANDRA_TABLE
+from env import  DEBEZIUM_CONNECT_URL, CASSANDRA_KEYSPACE, CASSANDRA_TABLE, KAFKA_BOOTSTRAP_SERVERS, KAFKA_GROUP_ID, KAFKA_AUTO_OFFSET_RESET, KAFKA_ENABLE_AUTO_COMMIT, CASSANDRA_CONTACT_POINTS, CASSANDRA_PORT, CASSANDRA_USERNAME, CASSANDRA_PASSWORD, POSTGRES_HOST, POSTGRES_PORT, POSTGRES_USER, POSTGRES_PASSWORD, POSTGRES_DB, DEBEZIUM_CONNECTOR_CONFIG_FILE
 import json
 import requests
-from utils import get_kafka_producer, setup_debezium_connector, get_cassandra_session, get_postgres_connection, delete_debezium_connector
-from config import DataRecord, FollowUserRequestBody
+from utils import  get_cassandra_session, get_postgres_connection
+from services.debezium import setup_debezium_connector, delete_debezium_connector
+from config import DataRecord, FollowUserRequestBody, AppConfig, KafkaConfig, CassandraConfig, DebeziumConfig, PostgresConfig
 from cache import cache
+from event_processor import EventProcessor
+from connection_state import connection_state, ConnectionState
 import asyncio
 
-app = FastAPI(title="user-feed")
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    tables = ["likes", "comments", "shards", "followers"]
+    app_config = AppConfig(
+        kafka=KafkaConfig(
+            bootstrap_servers=KAFKA_BOOTSTRAP_SERVERS,
+            group_id=KAFKA_GROUP_ID,
+            auto_offset_reset=KAFKA_AUTO_OFFSET_RESET,
+            enable_auto_commit=KAFKA_ENABLE_AUTO_COMMIT,
+            topics=[f"postgres.public.{table}" for table in tables]
+        ),
+        cassandra=CassandraConfig(
+            contact_points=CASSANDRA_CONTACT_POINTS,
+            port=CASSANDRA_PORT,
+            username=CASSANDRA_USERNAME,
+            password=CASSANDRA_PASSWORD,
+        ),
+        debezium=DebeziumConfig(
+            url=DEBEZIUM_CONNECT_URL,
+            connector_config_file=DEBEZIUM_CONNECTOR_CONFIG_FILE,
+        ),
+        postgres=PostgresConfig(
+            host=POSTGRES_HOST,
+            port=POSTGRES_PORT,
+            username=POSTGRES_USER,
+            password=POSTGRES_PASSWORD,
+            dbname=POSTGRES_DB,
+        )
+    )
+
+    processor = EventProcessor(app_config)
+    kafka_connected = await processor.connect_kafka()
+    cassandra_connected = await processor.connect_cassandra()
+
+    if kafka_connected and cassandra_connected:
+        print("Connected to Kafka and Cassandra")
+        asyncio.create_task(processor.process_events())
+        app.state.processor = processor
+        app.state.config = app_config
+    yield
+    if hasattr(app.state, 'processor'):
+        app.state.processor.stop()
+    await processor.close()
+
+app = FastAPI(title="user-feed", lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,
@@ -23,36 +72,68 @@ app.add_middleware(
 )
 
 
-
 @app.get("/")
 def read_root():
     return {"Hello" : "World"};
 
-@app.post("/activity", tags=["activity"])
-async def send_activity(data: DataRecord):
-    """
-    send user activity to kafka topic
-    This endpoint accepts the user activity data and sends it to the configured kafka topic
-    The data will be consumed by flink job and written to cassandra
-    """
-    try: 
-        data_dict = data.model_dump()
-        producer = get_kafka_producer()
-        
-        # Determine the topic based on source_table
-        topic = f"postgres.codeshard.{data.source_table}" if data.source_table else "default_topic"
-        
-        producer.produce(
-            topic,
-            key=data.user_id,
-            value=json.dumps(data_dict)
+
+@app.get("/status", response_model=ConnectionState)
+async def get_status():
+    """Get the current status of the CDC processor."""
+    return connection_state
+
+@app.post("/start", status_code=status.HTTP_202_ACCEPTED)
+async def start_processing(background_tasks: BackgroundTasks):
+    """Start CDC processing if it's not already running."""
+    if connection_state.processing_active:
+        return JSONResponse(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            content={"message": "Processing is already active"}
         )
-        producer.flush()
-        return {"status": "success", "message": f"Activity sent to Kafka topic {topic}"}
-    except Exception as e:
-        print(f"Error sending activity to Kafka: {e}")
-        raise HTTPException(status_code=500, detail=f"Failed to send activity to Kafka: {str(e)}")
     
+    processor = app.state.processor
+    
+    # Reconnect if needed
+    if not connection_state.kafka_connected:
+        await processor.connect_kafka()
+    
+    if not connection_state.cassandra_connected:
+        await processor.connect_cassandra()
+    
+    if connection_state.kafka_connected and connection_state.cassandra_connected:
+        background_tasks.add_task(processor.process_events)
+        return {"message": "Processing started"}
+    else:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to connect to Kafka or Cassandra"
+        )
+
+@app.post("/stop", status_code=status.HTTP_202_ACCEPTED)
+async def stop_processing():
+    """Stop CDC processing."""
+    if not connection_state.processing_active:
+        return JSONResponse(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            content={"message": "Processing is not active"}
+        )
+    
+    app.state.processor.stop()
+    return {"message": "Processing stopped"}
+
+@app.get("/config", response_model=AppConfig)
+async def get_config():
+    """Get the current configuration."""
+    return app.state.config
+
+@app.post("/reset_counter", status_code=status.HTTP_200_OK)
+async def reset_counter():
+    """Reset the processed events counter."""
+    connection_state.processed_events = 0
+    connection_state.last_processed = None
+    return {"message": "Counter reset"}
+
+
 @app.get("/cassandra/activities", tags=["cassandra"])
 def get_cassandra_activities(user_id: str, limit: int = 100, offset: int = 0):
     """
