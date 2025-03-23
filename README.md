@@ -1,4 +1,4 @@
-## User Feed using Debezium Change Data Capture and KFC(Kafka, Flink, Cassandra) Stack
+## User Feed using Debezium Change Data Capture 
 
 ### Problem Statement 
 This project implements a scalable user feed system that processes user activities in real-time while ensuring exactly-once semantics and high availability. The system handles user interactions like follows, posts, comments and likes through a multi-stage data pipeline.
