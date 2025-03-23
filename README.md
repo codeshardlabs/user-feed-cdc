@@ -13,9 +13,7 @@ Key Technical Components:
 
 2. Change Data Capture (Debezium)
 - Monitors PostgreSQL Write-Ahead Logs (WAL) for DML changes
-- Creates change events in Avro format with before/after states
 - Ensures reliable capture of all data modifications
-- Maintains offset tracking for exactly-once delivery
 - Publishes changes to dedicated Kafka topics
 
 3. Message Queue (Apache Kafka)
@@ -25,17 +23,10 @@ Key Technical Components:
 - Handles back-pressure and provides buffer capacity
 - Topics configured with appropriate retention and replication
 
-4. Change Data Capture (DataStax)
-- Uses DataStax CDC Source Connector to capture changes from Kafka
-- Automatically maps Kafka events to Cassandra table structures
-- Maintains exactly-once delivery semantics
-- Handles schema evolution and data type conversions
-- Built-in dead letter queue for error handling
-- Configurable batching and throughput control
-- Native integration with Cassandra authentication and security
-- Provides detailed monitoring and metrics
-- Supports automatic offset management
-- Handles backpressure natively through Cassandra driver
+4. Kafka Consumer 
+- Polls kafka topic for new message.
+- When we receive new message/event, it modifies the data according to the reqd. format. 
+- Saves the data in cassandra DB.
 
 5. Cache Layer (Redis)
 - In-memory caching of frequently accessed feeds
@@ -51,22 +42,14 @@ Key Technical Components:
 - Stores feed items in time-sorted order
 - Supports efficient pagination queries
 
-Data Flow:
+### Data Flow
 1. User performs activity (follow/post/comment/like) via REST API
 2. Activity is recorded in PostgreSQL tables
 3. Debezium captures change events from PostgreSQL WAL
 4. Events are published to corresponding Kafka topics
-5. Datastax CDC captures change events from Kafka topics and transfer them to Cassandra DB. 
+5. Kafka consumer polls the kafka topic for new event messages and if there is one, it modifies and ingests data to Cassandra DB.
 8. Redis caches frequently accessed feed segments
 9. Feed API serves requests from cache with Cassandra fallback
-
-The architecture ensures:
-- Exactly-once processing semantics
-- Horizontal scalability at each layer
-- High write throughput for activity ingestion
-- Low latency reads for feed serving
-- Fault tolerance and high availability
-- Efficient pagination support
 
 
 ### Workflow
