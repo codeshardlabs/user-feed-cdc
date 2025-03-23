@@ -25,12 +25,17 @@ Key Technical Components:
 - Handles back-pressure and provides buffer capacity
 - Topics configured with appropriate retention and replication
 
-4. Stream Processing (Apache Flink)
-- Stateful stream processing with exactly-once guarantees 
-- Uses checkpointing to handle failures and state recovery
-- Processes events in micro-batches for efficiency
-- Aggregates activities by user for feed generation
-- Maintains watermarks for handling out-of-order events
+4. Change Data Capture (DataStax)
+- Uses DataStax CDC Source Connector to capture changes from Kafka
+- Automatically maps Kafka events to Cassandra table structures
+- Maintains exactly-once delivery semantics
+- Handles schema evolution and data type conversions
+- Built-in dead letter queue for error handling
+- Configurable batching and throughput control
+- Native integration with Cassandra authentication and security
+- Provides detailed monitoring and metrics
+- Supports automatic offset management
+- Handles backpressure natively through Cassandra driver
 
 5. Cache Layer (Redis)
 - In-memory caching of frequently accessed feeds
@@ -51,9 +56,7 @@ Data Flow:
 2. Activity is recorded in PostgreSQL tables
 3. Debezium captures change events from PostgreSQL WAL
 4. Events are published to corresponding Kafka topics
-5. Flink consumes events with exactly-once guarantees
-6. Stream processors aggregate activities into user feeds
-7. Aggregated feeds are written to Cassandra
+5. Datastax CDC captures change events from Kafka topics and transfer them to Cassandra DB. 
 8. Redis caches frequently accessed feed segments
 9. Feed API serves requests from cache with Cassandra fallback
 

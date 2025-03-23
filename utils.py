@@ -1,20 +1,11 @@
-from pyflink.datastream import StreamExecutionEnvironment, CheckpointingMode
-from pyflink.datastream.execution_mode import RuntimeExecutionMode
-from pyflink.common.typeinfo import Types
-from pyflink.table import EnvironmentSettings, StreamTableEnvironment
 from env import CASSANDRA_CONTACT_POINTS, CASSANDRA_PORT, CASSANDRA_USERNAME, CASSANDRA_PASSWORD, KAFKA_BOOTSTRAP_SERVERS, POSTGRES_HOST, POSTGRES_PORT, POSTGRES_USER, POSTGRES_PASSWORD, POSTGRES_DB, DEBEZIUM_CONNECT_URL, DEBEZIUM_CONNECTOR_CONFIG_FILE, FLINK_CONNECTOR_KAFKA_JAR, FLINK_CONNECTOR_CASSANDRA_JAR, FLINK_JSON_JAR, KAFKA_CLIENT_JAR
 import psycopg2
 import json
 import requests
 from fastapi import HTTPException
-from enums import JobName
 from cassandra.cluster import Cluster
 from cassandra.auth import PlainTextAuthProvider
 from confluent_kafka import Producer
-from config import FlinkJobConfig
-from logger import logger
-from flink_strategy import DataStreamAdaptorStrategyFactory
-from enums import ActivityType
 
 ## Connect to cassandra
 def get_cassandra_session():
@@ -32,121 +23,6 @@ def get_cassandra_session():
 
 def get_kafka_producer():
     return Producer({'bootstrap.servers': KAFKA_BOOTSTRAP_SERVERS})
-
-def run_flink_job(config: FlinkJobConfig):
-    env = StreamExecutionEnvironment.get_execution_environment()
-    env.set_parallelism(config.parallelism)
-    env.enable_checkpointing(config.checkpoint_interval, CheckpointingMode.EXACTLY_ONCE)
-    env.set_runtime_mode(RuntimeExecutionMode.STREAMING)
-    # ## Create table environment
-    settings = EnvironmentSettings.new_instance() \
-    .in_streaming_mode() \
-    .build()
-
-    table_env = StreamTableEnvironment.create(env, environment_settings=settings)
-
-    ### add reqd. jar files
-    JAR_FILE_PREFIX = "file:///flink-connectors"
-    jar_paths = [
-        f"{JAR_FILE_PREFIX}/{FLINK_CONNECTOR_KAFKA_JAR}",
-        # f"{JAR_FILE_PREFIX}/{FLINK_CONNECTOR_CASSANDRA_JAR}",
-        f"{JAR_FILE_PREFIX}/{FLINK_JSON_JAR}",
-        f"{JAR_FILE_PREFIX}/{KAFKA_CLIENT_JAR}"
-    ]
-    logger.info(f"JAR paths: {jar_paths}")      
-
-    # Then join them with semicolons
-    jar_paths_str = ";".join(jar_paths)
-    logger.info(f"Final pipeline.jars value: {jar_paths_str}")
-    env.get_config().get_configuration().set_string(
-        "pipeline.jars", 
-        jar_paths_str
-    )
-    job_name = config.job_name
-
-    if config.job_name == JobName.KAFKA_TO_CASSANDRA.value:
-        strategy_factory = DataStreamAdaptorStrategyFactory()
-        for activity_type in ActivityType:
-            strategy = strategy_factory.get_strategy(activity_type)
-            table_env.execute_sql(strategy.get_create_table_query())
-            table_env.execute_sql(strategy.get_transform_data_query())
-            logger.info(f"Created table for {activity_type}")
-
-
-        table_env.execute_sql("""
-            CREATE VIEW kafka_source AS
-            SELECT * FROM transformed_likes
-            UNION ALL
-            SELECT * FROM transformed_shards
-            UNION ALL
-            SELECT * FROM transformed_followers
-            UNION ALL
-            SELECT * FROM transformed_comments
-        """)
-
-        print("hello before to_append_stream")
-
-        table_env.execute_sql(f"""
-            CREATE TABLE kafka_sink (
-                user_id STRING,
-                activity_id STRING,
-                activity_type STRING,
-                timestamp TIMESTAMP(3),
-                target_id STRING,
-                target_type STRING,
-                metadata MAP<STRING, STRING>,
-                PRIMARY KEY (user_id, activity_id) NOT ENFORCED
-            ) WITH (
-                'connector' = 'kafka',
-                'topic' = 'user_activity',
-                'properties.bootstrap.servers' = '{KAFKA_BOOTSTRAP_SERVERS}',
-                'properties.group.id' = '1',
-                'scan.startup.mode' = 'latest-offset',
-                'format' = 'json'
-            )
-        """)
-
-        print("hello before insert")
-
-
-        
-
-        table_env.execute_sql("""
-            INSERT INTO kafka_sink
-            SELECT * FROM kafka_source
-        """).wait()
-
-        print("hello after insert")
-
-
-        # data_stream = table_env.to_append_stream(
-        #     result_table, 
-        #     Types.ROW([
-        #         Types.STRING(), Types.STRING(), Types.STRING(), 
-        #         Types.SQL_TIMESTAMP(), Types.STRING(), Types.STRING(),
-        #         Types.MAP(Types.STRING(), Types.STRING())
-        #     ])
-        # )
-
-        # print("hello after to_append_stream")
-        
-        # cassandra_sink = CassandraSink.add_sink(data_stream)
-        # print("hello after add sink")
-        # cassandra_sink.set_host("cassandra", 9042)
-        # print("hello after set host")
-        # cassandra_sink.set_query("INSERT INTO codeshard.user_activity (user_id, activity_id, activity_type, event_timestamp, target_id, target_type, metadata) VALUES (?, ?, ?, ?, ?, ?, ?)")
-        # print("hello after set query")
-        # # data_stream.print()
-        # print("hello after print")
-        # data_stream.add_sink(cassandra_sink.build());
-        # print("hello after add sink")
-        # env.execute(config.job_name);
-
-        # print("Created cassandra sink view")
-    
-    else:
-        raise ValueError(f"Invalid job name: {job_name}")
-
 
 def get_postgres_connection():
     try: 

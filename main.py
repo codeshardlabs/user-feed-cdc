@@ -4,12 +4,11 @@ from typing import Union, Optional, Dict
 import os
 from confluent_kafka import Producer
 from pydantic import BaseModel
-from env import  DEBEZIUM_CONNECT_URL, FLINK_REST_API_URL, CASSANDRA_KEYSPACE, CASSANDRA_TABLE
-from enums import JobName
+from env import  DEBEZIUM_CONNECT_URL, CASSANDRA_KEYSPACE, CASSANDRA_TABLE
 import json
 import requests
-from utils import get_kafka_producer, run_flink_job, setup_debezium_connector, get_cassandra_session, get_postgres_connection, delete_debezium_connector
-from config import FlinkJobConfig, DataRecord, FollowUserRequestBody
+from utils import get_kafka_producer, setup_debezium_connector, get_cassandra_session, get_postgres_connection, delete_debezium_connector
+from config import DataRecord, FollowUserRequestBody
 from cache import cache
 import asyncio
 
@@ -54,41 +53,6 @@ async def send_activity(data: DataRecord):
         print(f"Error sending activity to Kafka: {e}")
         raise HTTPException(status_code=500, detail=f"Failed to send activity to Kafka: {str(e)}")
     
-
-@app.post("/job/start", tags=["flink"])
-def start_job(config: FlinkJobConfig):
-    """
-    Start a flink job with the given configuration
-    The job will be started in the background and the response will return immediately
-    The job status can be checked using the /job/status endpoint
-    """
-    try: 
-        valid_job_names = [job.value for job in JobName]
-        if config.job_name not in valid_job_names:
-            raise HTTPException(status_code=400, detail=f"Invalid job name: {config.job_name}")
-        run_flink_job(config);
-        # background_tasks.add_task(run_flink_job, config)
-        return {"status": "success", "message": f"Job {config.job_name} started"}
-    except Exception as e:
-        print(f"Error starting job: {e}")
-        raise HTTPException(status_code=500, detail=f"Failed to start job: {str(e)}")
-    
-@app.get("/flink/jobs", tags=["flink"])
-def get_flink_jobs():
-    """
-    Get the status of all flink jobs
-    This endpoint queries the Flink JobManager API to get information about all running jobs.
-    It returns a list of jobs with their status, name, and other details.
-    """
-    try: 
-        response = requests.get(f"{FLINK_REST_API_URL}/jobs/overview")
-        if response.status_code != 200:
-            raise HTTPException(status_code=500, detail=f"Failed to get flink jobs: {response.text}")
-        return response.json()
-    except Exception as e:
-        print(f"Error getting flink jobs: {e}")
-        raise HTTPException(status_code=500, detail=f"Failed to get flink jobs: {str(e)}")
-
 @app.get("/cassandra/activities", tags=["cassandra"])
 def get_cassandra_activities(user_id: str, limit: int = 100, offset: int = 0):
     """
