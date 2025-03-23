@@ -1,12 +1,12 @@
-from config import AppConfig
+from pydantic import BaseModel
 from datetime import datetime
-class ConnectionState:
-    def __init__(self):
-        self.kafka_connected = False
-        self.cassandra_connected = False
-        self.processing_active = False
-        self.processed_events = 0
-        self.last_processed_event = None
+from typing import Optional
+class ConnectionState(BaseModel):
+    kafka_connected: bool = False
+    cassandra_connected: bool = False
+    processing_active: bool = False
+    processed_events: int = 0
+    last_processed_event: Optional[datetime] = None
 
 
 connection_state = ConnectionState()

@@ -9,17 +9,19 @@ from pydantic import BaseModel
 from env import  DEBEZIUM_CONNECT_URL, CASSANDRA_KEYSPACE, CASSANDRA_TABLE, KAFKA_BOOTSTRAP_SERVERS, KAFKA_GROUP_ID, KAFKA_AUTO_OFFSET_RESET, KAFKA_ENABLE_AUTO_COMMIT, CASSANDRA_CONTACT_POINTS, CASSANDRA_PORT, CASSANDRA_USERNAME, CASSANDRA_PASSWORD, POSTGRES_HOST, POSTGRES_PORT, POSTGRES_USER, POSTGRES_PASSWORD, POSTGRES_DB, DEBEZIUM_CONNECTOR_CONFIG_FILE
 import json
 import requests
-from utils import  get_cassandra_session, get_postgres_connection
 from services.debezium import setup_debezium_connector, delete_debezium_connector
+from services.cassandra import get_cassandra_session
+from services.postgres import get_postgres_connection
 from config import DataRecord, FollowUserRequestBody, AppConfig, KafkaConfig, CassandraConfig, DebeziumConfig, PostgresConfig
 from cache import cache
 from event_processor import EventProcessor
 from connection_state import connection_state, ConnectionState
 import asyncio
+from enums import TableType
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    tables = ["likes", "comments", "shards", "followers"]
+    tables = [table.value for table in TableType]
     app_config = AppConfig(
         kafka=KafkaConfig(
             bootstrap_servers=KAFKA_BOOTSTRAP_SERVERS,
@@ -29,7 +31,7 @@ async def lifespan(app: FastAPI):
             topics=[f"postgres.public.{table}" for table in tables]
         ),
         cassandra=CassandraConfig(
-            contact_points=CASSANDRA_CONTACT_POINTS,
+            contact_points=[CASSANDRA_CONTACT_POINTS],
             port=CASSANDRA_PORT,
             username=CASSANDRA_USERNAME,
             password=CASSANDRA_PASSWORD,

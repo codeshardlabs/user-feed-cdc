@@ -1,8 +1,7 @@
 from confluent_kafka import Consumer, KafkaException
 from config import AppConfig
-from confluent_kafka.error import KafkaError, KafkaException
+from confluent_kafka.error import  KafkaException
 from connection_state import connection_state
-from utils import get_cassandra_session
 from logger import logger
 import asyncio
 from enums import TableType
@@ -10,19 +9,15 @@ from strategy import SchemaAdapterStrategyFactory
 import json
 from cassandra.query import BatchStatement
 from datetime import datetime
+from services.cassandra import get_cassandra_session
+from services.kafka import get_kafka_consumer
 class EventProcessor:
     def __init__(self, config: AppConfig):
         self.config = config
 
     async def connect_kafka(self):
         try:
-            self.consumer = Consumer({
-                'bootstrap.servers': self.config.kafka.bootstrap_servers,
-                'group.id': self.config.kafka.group_id,
-                'auto.offset.reset': self.config.kafka.auto_offset_reset,
-                'enable.auto.commit': self.config.kafka.enable_auto_commit
-            })
-            self.consumer.subscribe(self.config.kafka.topics)
+            self.consumer = get_kafka_consumer(self.config.kafka)
             connection_state.kafka_connected = True
             return True
         except KafkaException as e:
@@ -47,28 +42,28 @@ class EventProcessor:
         
         self.running = True
         connection_state.processing_active = True
-        batch_size = 100
+        batch_size = 1
         batch_events = []
         while self.running:
-            message = self.consumer.poll(1)
+            if not self.consumer:
+                self.consumer = get_kafka_consumer(self.config.kafka)
+            message = self.consumer.poll(1.0)
             if message is None:
                 await asyncio.sleep(0.1)
+                continue
             if message.error():
-                if message.error().code() == KafkaError._PARTITION_EOF:
-                    logger.info("Reached end of partition")
-                else:
-                    logger.error(f"Kafka error: {message.error()}")
+                logger.error(f"Kafka error: {message.error()}")
                 continue
             topic_name = message.topic()
-            table_name = topic_name.split(".")[2]
+            table_name = topic_name.split(".")[-1]
             try:
                 print(f"Received message: {message.value().decode('utf-8')}")
                 strategy = SchemaAdapterStrategyFactory.get_strategy(TableType(table_name))
-                data = strategy.transform(json.loads(message.value().decode('utf-8')))
-                batch_events.append(data)
-                if len(batch_events) >= batch_size:
-                    await self.process_batch(batch_events)
-                    batch_events = []
+                # data = strategy.transform(json.loads(message.value().decode('utf-8')))
+                # batch_events.append(data)
+                # if len(batch_events) >= batch_size:
+                #     await self.process_batch(batch_events)
+                #     batch_events = []
                 connection_state.processed_events += 1
                 connection_state.last_processed_event = datetime.now()
             except Exception as e:
@@ -78,7 +73,7 @@ class EventProcessor:
             finally:
                 connection_state.processing_active = False
 
-    async def stop(self):
+    async def close(self):
         self.running = False
         if self.consumer:
             self.consumer.close()

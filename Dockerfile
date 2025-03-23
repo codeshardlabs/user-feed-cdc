@@ -13,8 +13,6 @@ RUN mkdir -p /flink-connectors
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy Flink connectors and application code
-COPY flink-connectors/ /flink-connectors/
 COPY debezium-connectors/ /debezium-connectors/
 COPY . .
 

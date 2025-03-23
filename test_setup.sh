@@ -22,14 +22,7 @@ sleep 2
 echo -e "\nWaiting for CDC to process the changes..."
 sleep 10
 
-### Setup flink job
-echo "Setting up Flink job..."
-curl -X POST "http://localhost:8000/job/start" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "job_name": "kafka-to-cassandra"
-  }'
-echo -e "\nFlink job setup completed!"
+
 
 sleep 10
 
