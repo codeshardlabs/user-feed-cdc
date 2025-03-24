@@ -9,6 +9,8 @@ class  SchemaAdapterStrategy(ABC):
     def validate_data(self, data: dict) -> bool:
         if not hasattr(data, "__op") or not hasattr(data, "__table") or not hasattr(data, "__source_ts_ms"):
             return False
+        if data["__op"] != "c":
+            return False
         return True
 
 class SchemaAdapterStrategy1(SchemaAdapterStrategy):
@@ -20,10 +22,6 @@ class SchemaAdapterStrategy1(SchemaAdapterStrategy):
         
         src_table = data["__table"];
         ts_ms = data["__source_ts_ms"]
-        op = data["__op"]
-        if op != "c":
-            return None
-        
         activity_type = "LIKE_SHARD" 
         return CassandraRecord(
             user_id=data["liked_by"],
@@ -47,9 +45,6 @@ class SchemaAdapterStrategy2(SchemaAdapterStrategy):
         
         src_table = data["__table"];
         ts_ms = data["__source_ts_ms"]
-        op = data["__op"]
-        if op != "c":
-            return None
         activity_type = "COMMENT_SHARD" 
         return CassandraRecord(
             user_id=data["user_id"],
@@ -74,9 +69,6 @@ class SchemaAdapterStrategy3(SchemaAdapterStrategy):
         
         src_table = data["__table"];
         ts_ms = data["__source_ts_ms"]
-        op = data["__op"]
-        if op != "c":
-            return None
         activity_type = "CREATE_SHARD" 
         return CassandraRecord(
             user_id=data["user_id"],
@@ -104,9 +96,6 @@ class SchemaAdapterStrategy4(SchemaAdapterStrategy):
         
         src_table = data["__table"];
         ts_ms = data["__source_ts_ms"]
-        op = data["__op"]
-        if op != "c":
-            return None
         activity_type = "FOLLOW_USER" 
         return CassandraRecord(
             user_id=data["follower_id"],

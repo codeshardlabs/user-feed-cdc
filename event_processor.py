@@ -59,11 +59,12 @@ class EventProcessor:
             try:
                 print(f"Received message: {message.value().decode('utf-8')}")
                 strategy = SchemaAdapterStrategyFactory.get_strategy(TableType(table_name))
-                # data = strategy.transform(json.loads(message.value().decode('utf-8')))
-                # batch_events.append(data)
-                # if len(batch_events) >= batch_size:
-                #     await self.process_batch(batch_events)
-                #     batch_events = []
+                data = strategy.transform(json.loads(message.value().decode('utf-8')))
+                if data:
+                    batch_events.append(data)
+                    if len(batch_events) >= batch_size:
+                        await self.process_batch(batch_events)
+                        batch_events = []
                 connection_state.processed_events += 1
                 connection_state.last_processed_event = datetime.now()
             except Exception as e:
