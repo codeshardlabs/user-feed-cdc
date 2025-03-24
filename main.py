@@ -12,7 +12,7 @@ import requests
 from services.debezium import setup_debezium_connector, delete_debezium_connector
 from services.cassandra import get_cassandra_session
 from services.postgres import get_postgres_connection
-from config import DataRecord, FollowUserRequestBody, AppConfig, KafkaConfig, CassandraConfig, DebeziumConfig, PostgresConfig
+from config import  FollowUserRequestBody, AppConfig, KafkaConfig, CassandraConfig, DebeziumConfig, PostgresConfig
 from cache import cache
 from event_processor import EventProcessor
 from connection_state import connection_state, ConnectionState

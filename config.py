@@ -16,7 +16,7 @@ class CreatePostRequestBody(BaseModel):
     user_id: str
     title: str
 
-class DataRecord(BaseModel):
+class CassandraRecord(BaseModel):
     user_id: str
     activity_type: str
     timestamp: int
