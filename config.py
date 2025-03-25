@@ -1,7 +1,7 @@
 from pydantic import BaseModel, Field
 from typing import Optional, Dict, List
 from datetime import datetime
-
+import uuid
 class FlinkJobConfig(BaseModel):
     job_name: str
     parallelism: int = 1
@@ -17,12 +17,12 @@ class CreatePostRequestBody(BaseModel):
     title: str
 
 class CassandraRecord(BaseModel):
-    user_id: str
-    activity_id: str
+    user_id: uuid.UUID
+    activity_id: uuid.UUID
     activity_type: str
     event_timestamp: int
-    target_id: Optional[str] = None
-    target_type: Optional[str] = None
+    target_id: uuid.UUID
+    target_type: str
     metadata: Dict[str, str]
 
 

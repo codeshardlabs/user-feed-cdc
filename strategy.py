@@ -2,6 +2,7 @@ from abc import ABC, abstractmethod
 from enums import TableType
 from config import CassandraRecord
 import uuid 
+from typing import Union
 
 class  SchemaAdapterStrategy(ABC): 
     @abstractmethod
@@ -16,7 +17,7 @@ class  SchemaAdapterStrategy(ABC):
             return False
         return True
     
-    def convert_to_uuid(self, id: any) -> str:
+    def convert_to_uuid(self, id: any) -> Union[str, uuid.UUID]:
         try:
             return uuid.UUID(id) if id and isinstance(id, str) else uuid.UUID(str(id))
         except Exception as e:
@@ -41,6 +42,7 @@ class SchemaAdapterStrategy1(SchemaAdapterStrategy):
             return None
         return CassandraRecord(
             user_id=user_id,
+            activity_id=uuid.uuid1(), 
             activity_type=activity_type,
             event_timestamp=ts_ms,
             target_id=shard_id,
@@ -69,6 +71,7 @@ class SchemaAdapterStrategy2(SchemaAdapterStrategy):
             return None
         return CassandraRecord(
             user_id=user_id,
+            activity_id=uuid.uuid1(), 
             activity_type=activity_type,    
             event_timestamp=ts_ms,
             target_id=shard_id,
@@ -98,6 +101,7 @@ class SchemaAdapterStrategy3(SchemaAdapterStrategy):
             return None
         return CassandraRecord(
             user_id=user_id,
+            activity_id=uuid.uuid1(), 
             activity_type=activity_type,
             event_timestamp=ts_ms,
             target_id=shard_id,
@@ -130,6 +134,7 @@ class SchemaAdapterStrategy4(SchemaAdapterStrategy):
             return None
         return CassandraRecord(
             user_id=follower_id,
+            activity_id=uuid.uuid1(), 
             activity_type=activity_type,  
             event_timestamp=ts_ms,
             target_id=following_id,
