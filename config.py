@@ -18,12 +18,12 @@ class CreatePostRequestBody(BaseModel):
 
 class CassandraRecord(BaseModel):
     user_id: str
+    activity_id: str
     activity_type: str
-    timestamp: int
+    event_timestamp: int
     target_id: Optional[str] = None
     target_type: Optional[str] = None
     metadata: Dict[str, str]
-    source_table: Optional[str] = None
 
 
 class KafkaConfig(BaseModel):
