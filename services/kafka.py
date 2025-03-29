@@ -4,6 +4,7 @@ from config import KafkaConfig
 
 def get_kafka_consumer(kafka_config: KafkaConfig):
     try:
+        print("kafka config", kafka_config)
         consumer = Consumer({
             'bootstrap.servers': kafka_config.bootstrap_servers,
             'group.id': kafka_config.group_id,
@@ -11,6 +12,7 @@ def get_kafka_consumer(kafka_config: KafkaConfig):
             'enable.auto.commit': kafka_config.enable_auto_commit
         })           
         consumer.subscribe(kafka_config.topics)
+        print("consumer", consumer)
         return consumer
     except Exception as e:
         print(f"Error connecting to Kafka: {e}")

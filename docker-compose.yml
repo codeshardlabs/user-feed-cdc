@@ -169,7 +169,7 @@ services:
 
   # Debezium Connect for PostgreSQL CDC 
   connect:
-    image: debezium/connect:2.5.0.Final
+    image: debezium/connect:2.7.3.Final
     platform: linux/amd64
     ports:
       - "8083:8083"
@@ -177,14 +177,24 @@ services:
       - kafka
       - postgres
     depends_on:
-      - kafka
-      - postgres
+      kafka:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
     environment:
       - BOOTSTRAP_SERVERS=kafka:29092
-      - GROUP_ID=1
+      - GROUP_ID=user-feed
       - CONFIG_STORAGE_TOPIC=connect_configs
       - OFFSET_STORAGE_TOPIC=connect_offsets
       - STATUS_STORAGE_TOPIC=connect_statuses
+      - CONNECT_CONFIG_STORAGE_TOPIC_CONFIG=cleanup.policy=compact
+      - CONNECT_OFFSET_STORAGE_TOPIC_CONFIG=cleanup.policy=compact
+      - CONNECT_STATUS_STORAGE_TOPIC_CONFIG=cleanup.policy=compact
+      - CONNECT_KEY_CONVERTER=org.apache.kafka.connect.json.JsonConverter
+      - CONNECT_VALUE_CONVERTER=org.apache.kafka.connect.json.JsonConverter
+      - CONNECT_KEY_CONVERTER_SCHEMAS_ENABLE=false
+      - CONNECT_VALUE_CONVERTER_SCHEMAS_ENABLE=false
+      - CONNECT_LOG_LEVEL=DEBUG
     healthcheck:
       test: curl -f http://localhost:8083/ || exit 1
       interval: 10s
@@ -205,10 +215,14 @@ services:
       - redis_data:/data
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
+      interval: 30s
+      timeout: 10s
+      retries: 10
     restart: unless-stopped
+    deploy: 
+      resources: 
+        limits:
+          memory: 1G
     networks:
       - cdc-network
 
@@ -229,7 +243,7 @@ services:
       - KAFKA_BOOTSTRAP_SERVERS=kafka:29092
       - KAFKA_AUTO_OFFSET_RESET=earliest
       - KAFKA_ENABLE_AUTO_COMMIT=true
-      - KAFKA_GROUP_ID=1
+      - KAFKA_GROUP_ID=user-feed
       - CASSANDRA_CONTACT_POINTS=cassandra
       - CASSANDRA_PORT=9042
       - CASSANDRA_KEYSPACE=codeshard

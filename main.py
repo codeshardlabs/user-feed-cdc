@@ -53,11 +53,11 @@ async def lifespan(app: FastAPI):
     kafka_connected = await processor.connect_kafka()
     cassandra_connected = await processor.connect_cassandra()
 
+    app.state.config = app_config
+    app.state.processor = processor
     if kafka_connected and cassandra_connected:
         print("Connected to Kafka and Cassandra")
         asyncio.create_task(processor.process_events())
-        app.state.processor = processor
-        app.state.config = app_config
     yield
     if hasattr(app.state, 'processor'):
         app.state.processor.stop()
@@ -217,7 +217,7 @@ async def setup_debezium():
     
     for attempt in range(max_retries):
         try:
-            result = await setup_debezium_connector()
+            result = await setup_debezium_connector(app.state.config.debezium, app.state.config.postgres)
             return {"data": result, "status": "success", "message": "Debezium connector setup completed"}
         except Exception as e:
             if attempt < max_retries - 1:
@@ -269,7 +269,8 @@ async def follow_user(body: FollowUserRequestBody):
     Follow a user.
     """
     try: 
-        conn = get_postgres_connection()
+        print("postgres config", app.state.config.postgres)
+        conn = get_postgres_connection(app.state.config.postgres)
         cur = conn.cursor()
         cur.execute(f"INSERT INTO followers (follower_id, following_id) VALUES ('{body.user_id}', '{body.other_user_id}')")
         conn.commit()
@@ -287,7 +288,7 @@ async def create_post(user_id: str, title: str):
     Create a new post.
     """
     try: 
-        session = get_postgres_connection()
+        session = get_postgres_connection(app.state.config.postgres)
         title = title if title else "Untitled"
         session.execute(f"INSERT INTO shards (user_id, title, mode, type) VALUES ('{user_id}', '{title}', 'normal', 'public')")
         return {"status": "success", "message": "Post created successfully"}
@@ -301,7 +302,7 @@ async def comment_on_post(user_id: str, shard_id: str, message: str):
     Comment on a post.
     """
     try: 
-        session = get_postgres_connection()
+        session = get_postgres_connection(app.state.config.postgres)
         session.execute(f"INSERT INTO comments (user_id, shard_id, comment) VALUES ('{user_id}', '{shard_id}', '{message}')")
         return {"status": "success", "message": "Comment created successfully"}
     except Exception as e:
@@ -314,7 +315,7 @@ async def like_post(user_id: str, shard_id: str):
     Like a post.
     """
     try: 
-        session = get_postgres_connection()
+        session = get_postgres_connection(app.state.config.postgres)
         session.execute(f"INSERT INTO likes (user_id, shard_id) VALUES ('{user_id}', '{shard_id}')")
         return {"status": "success", "message": "Post liked successfully"}
     except Exception as e:

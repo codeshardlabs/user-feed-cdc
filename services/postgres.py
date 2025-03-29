@@ -7,7 +7,7 @@ def get_postgres_connection(postgres_config: PostgresConfig):
         conn = psycopg2.connect(
             host= postgres_config.host,
             port= postgres_config.port,
-            user= postgres_config.user,
+            user= postgres_config.username,
             password= postgres_config.password,
             dbname= postgres_config.dbname
             ) 
