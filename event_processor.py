@@ -1,6 +1,4 @@
-from confluent_kafka import Consumer, KafkaException
 from config import AppConfig
-from confluent_kafka.error import  KafkaException
 from connection_state import connection_state
 from logger import logger
 import asyncio
@@ -20,7 +18,7 @@ class EventProcessor:
             self.consumer = get_kafka_consumer(self.config.kafka)
             connection_state.kafka_connected = True
             return True
-        except KafkaException as e:
+        except Exception as e:
             connection_state.kafka_connected = False
             print(f"Error connecting to Kafka: {e}")
             return False
@@ -47,24 +45,22 @@ class EventProcessor:
         while self.running:
             if not self.consumer:
                 self.consumer = get_kafka_consumer(self.config.kafka)
-            message = self.consumer.poll(1.0)
+            message = self.consumer.poll(1000)
             if message is None:
+                print("no message received")
                 await asyncio.sleep(0.1)
                 continue
-            if message.error():
-                logger.error(f"Kafka error: {message.error()}")
-                continue
-            topic_name = message.topic()
-            table_name = topic_name.split(".")[-1]
+            # topic_name = message.topic()
+            # table_name = topic_name.split(".")[-1]
             try:
-                print(f"Received message: {message.value().decode('utf-8')}")
-                strategy = SchemaAdapterStrategyFactory.get_strategy(TableType(table_name))
-                data = strategy.transform(json.loads(message.value().decode('utf-8')))
-                if data:
-                    batch_events.append(data)
-                    if len(batch_events) >= batch_size:
-                        await self.process_batch(batch_events)
-                        batch_events = []
+                print(f"Received message: {message}")
+                # strategy = SchemaAdapterStrategyFactory.get_strategy(TableType(table_name))
+                # data = strategy.transform(json.loads(message.value().decode('utf-8')))
+                # if data:
+                #     batch_events.append(data)
+                #     if len(batch_events) >= batch_size:
+                #         await self.process_batch(batch_events)
+                #         batch_events = []
                 connection_state.processed_events += 1
                 connection_state.last_processed_event = datetime.now()
             except Exception as e:

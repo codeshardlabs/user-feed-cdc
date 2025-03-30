@@ -4,7 +4,6 @@ from fastapi.responses import JSONResponse
 from contextlib import asynccontextmanager
 from typing import Union, Optional, Dict
 import os
-from confluent_kafka import Producer
 from pydantic import BaseModel
 from env import  DEBEZIUM_CONNECT_URL, CASSANDRA_KEYSPACE, CASSANDRA_TABLE, KAFKA_BOOTSTRAP_SERVERS, KAFKA_GROUP_ID, KAFKA_AUTO_OFFSET_RESET, KAFKA_ENABLE_AUTO_COMMIT, CASSANDRA_CONTACT_POINTS, CASSANDRA_PORT, CASSANDRA_USERNAME, CASSANDRA_PASSWORD, POSTGRES_HOST, POSTGRES_PORT, POSTGRES_USER, POSTGRES_PASSWORD, POSTGRES_DB, DEBEZIUM_CONNECTOR_CONFIG_FILE
 import json
@@ -59,8 +58,6 @@ async def lifespan(app: FastAPI):
         print("Connected to Kafka and Cassandra")
         asyncio.create_task(processor.process_events())
     yield
-    if hasattr(app.state, 'processor'):
-        app.state.processor.stop()
     await processor.close()
 
 app = FastAPI(title="user-feed", lifespan=lifespan)
@@ -120,7 +117,7 @@ async def stop_processing():
             content={"message": "Processing is not active"}
         )
     
-    app.state.processor.stop()
+    app.state.processor.close()
     return {"message": "Processing stopped"}
 
 @app.get("/config", response_model=AppConfig)
