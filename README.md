@@ -1,9 +1,18 @@
 ## User Feed using Debezium Change Data Capture 
 
 ### Problem Statement 
-This project implements a scalable user feed system that processes user activities in real-time while ensuring exactly-once semantics and high availability. The system handles user interactions like follows, posts, comments and likes through a multi-stage data pipeline.
+This project implements a scalable user feed system that processes user activities in real-time while ensuring at least-once semantics and high availability. The system handles user interactions like follows, posts, comments and likes through a multi-stage data pipeline.
 
-Key Technical Components:
+### Workflow
+
+ ![Workflow](/public/workflow.png)
+
+### Overview
+This project implements a real-time data pipeline using Debezium for Change Data Capture (CDC) from PostgreSQL. At its core, Debezium monitors PostgreSQL's Write Ahead Log (WAL) for any data modifications, which requires configuring PostgreSQL with logical WAL level. When changes occur in the source PostgreSQL tables, Debezium captures these changes from the WAL and streams them to dedicated Kafka topics. A Kafka consumer service continuously polls these topics for new messages, processing them using a SchemaAdapterStrategyFactory that leverages Factory and Strategy patterns to transform the data into Cassandra's schema format. The transformed data is then batch inserted into Cassandra, chosen specifically for its distributed architecture and high write throughput capabilities. Cassandra's Log-Structured Merge (LSM) tree data structure optimizes write performance by first storing data in memory before flushing to disk, making it ideal for data ingestion scenarios.
+
+
+
+### Technical Components
 
 1. Source System (PostgreSQL)
 - Primary database storing user activities and interactions
@@ -20,22 +29,19 @@ Key Technical Components:
 - Provides durable storage of change events
 - Maintains strict ordering within partitions
 - Enables parallel processing through multiple partitions
-- Handles back-pressure and provides buffer capacity
 - Topics configured with appropriate retention and replication
 
-4. Kafka Consumer 
+4. Polling System (Kafka Consumer)
 - Polls kafka topic for new message.
 - When we receive new message/event, it modifies the data according to the reqd. format. 
 - Saves the data in cassandra DB.
 
 5. Cache Layer (Redis)
 - In-memory caching of frequently accessed feeds
-- Implements sliding window cache invalidation
 - Provides sub-millisecond read latency for hot data
-- Uses sorted sets for feed pagination
 - Falls back to Cassandra for cache misses
 
-6. Storage Layer (Apache Cassandra)
+6. Sink System (Apache Cassandra)
 - Log-Structured Merge (LSM) tree based storage
 - Optimized for high-throughput writes
 - Partitioned by user_id for efficient reads
@@ -52,15 +58,12 @@ Key Technical Components:
 9. Feed API serves requests from cache with Cassandra fallback
 
 
-### Workflow
-
- ![Workflow](/public/workflow.png)
 
  ### Possible Activity types to be listed on user feed
- - Follow User ("FOLLOW")
- - User Create New Post ("SHARD")
- - User Comment on Post ("COMMENT")
- - User Likes a post ("LIKE")
+ - Follow User ("FOLLOWERS")
+ - User Create New Post ("SHARDS")
+ - User Comment on Post ("COMMENTS")
+ - User Likes a post ("LIKES")
 
 ### Local Development
 #### Start all the services

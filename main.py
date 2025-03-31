@@ -146,26 +146,15 @@ def get_cassandra_activities(user_id: str, limit: int = 100, offset: int = 0):
             return {"data": cached_activities, "count": len(cached_activities)}
         
         # get user followers from postgres
-        conn = get_postgres_connection()
+        conn = get_postgres_connection(app.state.config.postgres)
         cur = conn.cursor()
         cur.execute(f"SELECT following_id FROM followers WHERE follower_id = '{user_id}'")
         followers = [follower.following_id for follower in cur]
         cur.close()
         conn.close()
-
+        print("followers", followers)
         # get activities from cassandra
-        cassandra_session = get_cassandra_session()
-        
-        # Convert all follower IDs to UUIDs
-        try:
-            # Convert list of follower IDs to list of UUIDs
-            follower_uuids = []
-            for follower_id in followers:
-                uuid_result = cassandra_session.execute(f"SELECT UUID('{follower_id}') AS uuid")[0]
-                follower_uuids.append(uuid_result.uuid)
-        except Exception as e:
-            cassandra_session.shutdown()
-            raise HTTPException(status_code=404, detail=f"Invalid UUID format in follower IDs: {str(e)}")
+        cassandra_session = get_cassandra_session(app.state.config.cassandra)
         
         ## query with prepared statement for security
         prepared_stmt = cassandra_session.prepare(
@@ -176,16 +165,15 @@ def get_cassandra_activities(user_id: str, limit: int = 100, offset: int = 0):
                 OFFSET ?
             """)
         
-        result = cassandra_session.execute(prepared_stmt, (follower_uuids, limit, offset))
+        result = cassandra_session.execute(prepared_stmt, (followers, limit, offset))
         results = []
         for row in result:
-                # Handle potential None values and proper UUID conversion
             temp = {
-                "user_id": str(row.user_id) if row.user_id else None,
+                "user_id": row.user_id if row.user_id else None,
                 "activity_id": str(row.activity_id) if row.activity_id else None,
                 "activity_type": row.activity_type,
-                "timestamp": row.timestamp.isoformat() if row.timestamp else None,
-                "target_id": str(row.target_id) if row.target_id else None,
+                "timestamp": row.event_timestamp.isoformat() if row.event_timestamp else None,
+                "target_id": row.target_id if row.target_id else None,
                 "target_type": row.target_type if row.target_type else None,
                 "metadata": dict(row.metadata) if row.metadata else {}
             }

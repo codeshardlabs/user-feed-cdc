@@ -22,9 +22,10 @@ sleep 2
 echo -e "\nWaiting for CDC to process the changes..."
 sleep 10
 
+echo -e "\nStart processing activities..."
+curl -X POST "http://localhost:8000/start"
 
-
-sleep 10
+sleep 30
 
 # Get user 1's feed
 echo "Getting user 1's feed (should see user 2's activities)..."
