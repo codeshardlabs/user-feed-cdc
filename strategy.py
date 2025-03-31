@@ -10,19 +10,12 @@ class  SchemaAdapterStrategy(ABC):
         pass 
 
     def validate_data(self, data: dict) -> bool:
-        print("validate_date: invoked", data)
-        if not hasattr(data, "__op") or not hasattr(data, "__table") or not hasattr(data, "__source_ts_ms"):
+        print("validate_data: invoked", data)
+        if  "__op" not in data or "__table" not in data or "__source_ts_ms" not in data:
             return False
-        if data["__op"] != "c":
+        if data["__op"] != 'c':
             return False
         return True
-    
-    def convert_to_uuid(self, id: any) -> Union[str, uuid.UUID]:
-        try:
-            return uuid.UUID(id) if id and isinstance(id, str) else uuid.UUID(str(id))
-        except Exception as e:
-            print(f"Error converting to UUID: {e}")
-            return ""
         
 
 class SchemaAdapterStrategy1(SchemaAdapterStrategy):
@@ -31,15 +24,13 @@ class SchemaAdapterStrategy1(SchemaAdapterStrategy):
     def transform(self, data: dict) -> CassandraRecord:
         if not self.validate_data(data):
             return None
+        print("transform type 1: invoked", data)
         
         src_table = data["__table"];
         ts_ms = data["__source_ts_ms"]
         activity_type = "LIKE_SHARD" 
-        user_id = self.convert_to_uuid(data["liked_by"])
-        shard_id = self.convert_to_uuid(data["shard_id"])
-        if user_id == "" or shard_id == "":
-            print(f"Invalid user_id or shard_id: {user_id} {shard_id}")
-            return None
+        user_id = data["liked_by"]
+        shard_id = str(data["shard_id"])
         return CassandraRecord(
             user_id=user_id,
             activity_id=uuid.uuid1(), 
@@ -49,9 +40,10 @@ class SchemaAdapterStrategy1(SchemaAdapterStrategy):
             target_type="shard",
             metadata={
                 "source_table" : src_table,
-                "primary_key": str(data["id"])
-            },
-            source_table=src_table
+                 "primary_key_value" : str(data["id"]),
+                "primary_key_field" : "id",
+                "primary_key_type" : "integer"
+            }
         )
 
 class SchemaAdapterStrategy2(SchemaAdapterStrategy):
@@ -60,15 +52,13 @@ class SchemaAdapterStrategy2(SchemaAdapterStrategy):
     def transform(self, data: dict) -> CassandraRecord:
         if not self.validate_data(data):
             return None
+        print("transform type 2: invoked", data)
         
         src_table = data["__table"];
         ts_ms = data["__source_ts_ms"]
         activity_type = "COMMENT_SHARD" 
-        user_id = self.convert_to_uuid(data["user_id"])
-        shard_id = self.convert_to_uuid(data["shard_id"])
-        if user_id == "" or shard_id == "":
-            print(f"Invalid user_id or shard_id: {user_id} {shard_id}")
-            return None
+        user_id = data["user_id"]
+        shard_id = str(data["shard_id"])
         return CassandraRecord(
             user_id=user_id,
             activity_id=uuid.uuid1(), 
@@ -79,9 +69,10 @@ class SchemaAdapterStrategy2(SchemaAdapterStrategy):
             metadata={
                 "message" : data["message"],
                 "source_table": src_table,
-                "primary_key": str(data["id"])
-            },
-            source_table=src_table
+                "primary_key_value" : str(data["id"]),
+                "primary_key_field" : "id",
+                "primary_key_type" : "integer"
+            }
         )
 
 class SchemaAdapterStrategy3(SchemaAdapterStrategy):
@@ -90,15 +81,13 @@ class SchemaAdapterStrategy3(SchemaAdapterStrategy):
     def transform(self, data: dict) -> CassandraRecord:
         if not self.validate_data(data):
             return None
+        print("transform type 3: invoked", data)
         
         src_table = data["__table"];
         ts_ms = data["__source_ts_ms"]
         activity_type = "CREATE_SHARD" 
-        user_id = self.convert_to_uuid(data["user_id"])
-        shard_id = self.convert_to_uuid(data["id"])
-        if user_id == "" or shard_id == "":
-            print(f"Invalid user_id or shard_id: {user_id} {shard_id}")
-            return None
+        user_id = data["user_id"]
+        shard_id = str(data["id"])
         return CassandraRecord(
             user_id=user_id,
             activity_id=uuid.uuid1(), 
@@ -112,9 +101,10 @@ class SchemaAdapterStrategy3(SchemaAdapterStrategy):
                 "type" : data["type"],
                 "title": data["title"],
                 "source_table": src_table,
-                "primary_key" : str(data["id"])
-            },
-            source_table=src_table
+                "primary_key_value" : str(data["id"]),
+                "primary_key_field" : "id",
+                "primary_key_type" : "integer"
+            }
         )
 
 class SchemaAdapterStrategy4(SchemaAdapterStrategy):
@@ -123,15 +113,12 @@ class SchemaAdapterStrategy4(SchemaAdapterStrategy):
     def transform(self, data: dict) -> CassandraRecord:
         if not self.validate_data(data):
             return None
-        
+        print("transform type 4: invoked", data)
         src_table = data["__table"];
         ts_ms = data["__source_ts_ms"]
         activity_type = "FOLLOW_USER" 
-        follower_id = self.convert_to_uuid(data["follower_id"])
-        following_id = self.convert_to_uuid(data["following_id"])
-        if follower_id == "" or following_id == "":
-            print(f"Invalid follower_id or following_id: {follower_id} {following_id}")
-            return None
+        follower_id = data["follower_id"]
+        following_id = data["following_id"]
         return CassandraRecord(
             user_id=follower_id,
             activity_id=uuid.uuid1(), 
@@ -141,9 +128,10 @@ class SchemaAdapterStrategy4(SchemaAdapterStrategy):
             target_type="user",
             metadata={
                 "source_table": src_table,
-                "primary_key": str(data["id"])
-            },
-            source_table=src_table
+                 "primary_key_value" : str(data["id"]),
+                "primary_key_field" : "id",
+                "primary_key_type" : "integer"
+            }
         )
 
 class SchemaAdapterStrategyFactory:

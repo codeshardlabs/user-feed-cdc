@@ -4,11 +4,11 @@ WITH replication = {'class': 'SimpleStrategy', 'replication_factor': 1};
 
 -- Create the user activity table
 CREATE TABLE IF NOT EXISTS codeshard.user_activity (
-    user_id UUID,
+    user_id TEXT,
     activity_id TIMEUUID,
     activity_type TEXT,
     event_timestamp TIMESTAMP,
-    target_id UUID,
+    target_id TEXT,
     target_type TEXT,
     metadata MAP<TEXT, TEXT>,
     PRIMARY KEY ((user_id), activity_id)

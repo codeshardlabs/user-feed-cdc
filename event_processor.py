@@ -54,18 +54,26 @@ class EventProcessor:
             # table_name = topic_name.split(".")[-1]
             try:
                 print(f"Received message: {message}")
-                # strategy = SchemaAdapterStrategyFactory.get_strategy(TableType(table_name))
-                # data = strategy.transform(json.loads(message.value().decode('utf-8')))
-                # if data:
-                #     batch_events.append(data)
-                #     if len(batch_events) >= batch_size:
-                #         await self.process_batch(batch_events)
-                #         batch_events = []
-                connection_state.processed_events += 1
-                connection_state.last_processed_event = datetime.now()
+                if message: 
+                    for topic_partition, records in message.items():
+                        topic = topic_partition.topic
+                        partition = topic_partition.partition
+                        for record in records:
+                            print(f"Received message: {record.value}")
+                            value = json.loads(record.value)
+                            print(f"Value: {value}")
+                            strategy = SchemaAdapterStrategyFactory.get_strategy(TableType(value['__source_table']))
+                            data = strategy.transform(value)
+                            print(f"Data: {data}")
+                            if data:
+                                batch_events.append(data)
+                        if len(batch_events) >= batch_size:
+                            await self.process_batch(batch_events)
+                            batch_events = []
+                    connection_state.processed_events += 1
+                    connection_state.last_processed_event = datetime.now()
             except Exception as e:
                 logger.error(f"Error processing message: {e}")
-                connection_state.running = False
                 continue
             finally:
                 connection_state.processing_active = False
@@ -80,26 +88,30 @@ class EventProcessor:
     
     async def process_batch(self, batch_events: list):
         print(f"Insert batch of {len(batch_events)} events to cassandra")
-        batch = BatchStatement()
-        if not self.cassandra_session:
-            self.cassandra_session = get_cassandra_session(self.config.cassandra)
-        insert_query = self.cassandra_session.prepare("""
-            INSERT INTO codeshard.user_activity 
-            (user_id, activity_id, activity_type, event_timestamp, target_id, target_type, metadata) 
-            VALUES (?, ?, ?, ?, ?, ?, ?)
-        """)
-        for event in batch_events:
-            batch.add(insert_query, (
-                event['user_id'],
-                event['activity_id'],
-                event['activity_type'],
-                event['event_timestamp'],
-                event['target_id'],
-                event['target_type'],
-                event['metadata']
-            ))
-        
-        self.cassandra_session.execute(batch)
+        try: 
+            batch = BatchStatement()
+            if not self.cassandra_session:
+                self.cassandra_session = get_cassandra_session(self.config.cassandra)
+            insert_query = self.cassandra_session.prepare("""
+                INSERT INTO codeshard.user_activity 
+                (user_id, activity_id, activity_type, event_timestamp, target_id, target_type, metadata) 
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+            """)
+            for event in batch_events:
+                batch.add(insert_query, (
+                    event.user_id,
+                    event.activity_id,
+                    event.activity_type,
+                    event.event_timestamp,
+                    event.target_id,
+                    event.target_type,
+                    event.metadata
+                ))
+            self.cassandra_session.execute(batch)
+        except Exception as e: 
+            print(f"error while cassandra batch processing: {e}")
+            pass
+
         
             
     
